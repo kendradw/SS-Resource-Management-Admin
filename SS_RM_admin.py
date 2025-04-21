@@ -6,32 +6,38 @@ from smartsheet_grid import grid
 import requests
 import json
 import time
-from globals import *
+import os
+from dotenv import load_dotenv
 import pandas as pd
-from logger import ghetto_logger
+from configs.setup_logger import setup_logger
 #endregion
+
+load_dotenv("configs/.env")
 
 class SmartsheetRmAdmin():
     '''admin for DCT's Resource Management tool that is part of SS'''
     def __init__(self, config):
         self.config = config
-        self.apply_config(config)
+        self.apply_config(config) # '''turns all config items into self.key = value'''
+  
         grid.token=self.smartsheet_token
         self.smart = smartsheet.Smartsheet(access_token=self.smartsheet_token)
         self.smart.errors_as_exceptions(True)
         self.start_time = time.time()
-        self.log=ghetto_logger("SS_RM_admin.py")
+        self.log=setup_logger(__name__)
         self.rm_header = {
             'Content-Type': 'application/json',
             'auth': self.rm_token
         }
         self.error_w_hh2sheet = []
         self.base_url='https://api.rm.smartsheet.com'
-    #region helpers
+
+    #region Helpers --------------------------------------------------------------------
     def apply_config(self, config):
         '''turns all config items into self.key = value'''
         for key, value in config.items():
             setattr(self, key, value)
+
     def validate_and_contains_first_row(self, dataframe):
         '''Checks if all columns have the words from the first row (minus the last, which is row ids)
         this is important because that match represents that the data DCT pastes in matches what this script is expecting to see'''
@@ -46,6 +52,7 @@ class SmartsheetRmAdmin():
             if column !='id' and column not in correct_columns:
                 incorrect_columns.append(column)
         return incorrect_columns  # If all cells are contained, return True
+    
     def paginated_rm_getrequest(self, endpoint, params=None):
         """
         Fetches data from an API endpoint. Handles both single item and paginated responses.
@@ -69,9 +76,10 @@ class SmartsheetRmAdmin():
                 else:
                     return response_json  # Return a single item
             else:
-                self.log.log(f"Failed to fetch data: {response.status_code} - {response.reason}")
+                self.log.error(f"Failed to fetch data: {response.status_code} - {response.reason}")
                 break  # Exit loop on failure
         return items if items else []
+    
     def convert_date_format(self, original_date, ss_format = False):
         '''converst YEAR-0DAY-0MONTH to day/month/year, SS_format refers to how it shows up in SS for making corresponding strings (with leading zeros and 2 digit years)'''
         year, month, day = original_date.split('-')
@@ -81,11 +89,13 @@ class SmartsheetRmAdmin():
             month = str(int(month))  # Remove leading zero
             day = str(int(day))  # Remove leading zero
             return f"{month}/{day}/{year}"
+        
     def generate_now_string(self):
         '''generates now string for psoting'''
         now = datetime.now()
         dt_string = now.strftime("%m/%d %H:%M")
         return dt_string
+    
     def return_email_list(self, sheet_id, df):
         '''OUTDATED grabs all sheet data, and returns a list of emails that is in the same order as the row (which can be used to filter out emails not in RM)'''
         response = requests.get(f'https://api.smartsheet.com/2.0/sheets/{sheet_id}?level=2&include=objectValue', headers={'Authorization': f"Bearer {sra.smartsheet_token}"})
@@ -100,7 +110,8 @@ class SmartsheetRmAdmin():
                 except KeyError:
                     pass
         else:
-            self.log.log('error with grabbing emails from sheet...')
+            self.log.info('error with grabbing emails from sheet...')
+
     def find_email_index(self, data, df):
         '''OUTDATED used to find the column index that has PRIMARY DCT so I can grab emails via requests library and column index (and use this to filter out emails that are not already in RM)'''
         for row in data['rows']:
@@ -108,6 +119,7 @@ class SmartsheetRmAdmin():
                 if isinstance(cell.get('objectValue'), dict):
                     if cell.get('objectValue').get('name') == df['PRIMARY DCT'].tolist()[0]:
                         return i
+                    
     def grab_rm_userids(self):
         '''grabs each user's id, this will help with allocating hours to users correctly'''
         response_dict = self.paginated_rm_getrequest(endpoint='/api/v1/users')
@@ -124,6 +136,7 @@ class SmartsheetRmAdmin():
                 self.email_to_sageid[user['email'].lower()] = user['employee_number']
                 self.userid_to_email[user['id']] = user['email'].lower()
                 self.email_to_userid[user['email'].lower()] = user['id']
+
     def grab_rm_projids(self):
         '''grabs each project's id from RM in SS, also makes dict that can translate rm_id to job number for time & expense
         I added the "orange" "leavetype" projects from rm so I need to append those to the objects so they are added 8.5.24'''
@@ -155,6 +168,7 @@ class SmartsheetRmAdmin():
         self.rm_id_to_jobnum[self.rm_leave_type_ids["Parental Leave"]] = 'PARELEAVE'  
         self.jobnum_to_rm_id[proj['project_code']] = proj['id']
         self.jobnum_to_rm_id['PARELEAVE'] = self.rm_leave_type_ids["Parental Leave"]
+
     def custom_round(self, n, digits):
         '''python does not round as I'd expect and it needs to be a perfect match with the round on SS so had to make custom (using chatGPT)'''
         # Scale the number to keep the part we're interested in as an integer.
@@ -174,10 +188,10 @@ class SmartsheetRmAdmin():
             return int(result)
         else:
             return result
-
     #endregion
-    #region Time & Expense
-        #region remedy no sage id
+
+    #region Time & Expense -------------------------------------------------------------
+        #region Remedy No Sage id ------------------------------------------------------
     def grab_sage_id_dict(self):
         '''grab sage id // email dict from ss'''
         sheet = grid(self.hris_data_sheetid)
@@ -190,6 +204,7 @@ class SmartsheetRmAdmin():
                 self.sage_id_dict[email] = row['sage_id']
             except AttributeError:
                 email = ''
+
     def post_user_emplnum(self):
         '''updates employee to have employee number'''
         for user in self.needs_emplnum_update:
@@ -200,9 +215,10 @@ class SmartsheetRmAdmin():
             response = requests.put(f"https://api.rm.smartsheet.com/api/v1/users/{user['rm_usr_id']}", headers=self.rm_header, data=json.dumps(data))
 
             if response.status_code == 200:
-                self.log.log(f"Added EmpployeeNumber to {user['name']}'s user data")
+                self.log.info(f"Added EmpployeeNumber to {user['name']}'s user data")
 
             response_dict = response.json()
+
     def audit_users_emplnum(self):
         '''if new employee does not have employee number: spot, grab sage_id, post'''
 
@@ -217,6 +233,7 @@ class SmartsheetRmAdmin():
             time.sleep(5)
             self.grab_rm_userids()
         #endregion 
+
     def fetch_and_prepare_hh2_data(self):
         '''grabs the hh2 data from ss, then cleans the df and creates a list of dict records
         I have to replace Jobs with resulting Jobs because Katherine added jobs that are the results of certain data conditions, not from hh2 8.5.24'''
@@ -240,9 +257,10 @@ class SmartsheetRmAdmin():
             self.flat_hh2_records = self.aggregate_hh2_data(df)
         else: 
             self.error_w_hh2sheet.append(f"First row validation failed (so script did not run properly). Please check {invalid_column_list} columns. ({self.generate_now_string()})")
-            self.log.log(f'HH2 Sheet error: please check the following column(s) {invalid_column_list} at https://app.smartsheet.com/sheets/GffHvGGxVJwQ9P8w8gwgfqrmJjcq39JXvMQmH7q1?view=grid&filterId=3306346053062532')
-            self.log.log('if this is a new column, add it to df.drop in fetch_and_prepare_hh2_data(self)')
+            self.log.error(f'HH2 Sheet error: please check the following column(s) {invalid_column_list} at https://app.smartsheet.com/sheets/GffHvGGxVJwQ9P8w8gwgfqrmJjcq39JXvMQmH7q1?view=grid&filterId=3306346053062532')
+            self.log.info('if this is a new column, add it to df.drop in fetch_and_prepare_hh2_data(self)')
             return None  # Return to avoid further processing
+        
     def clean_df_for_processing(self, df):
         '''cleans incoming hh2 data from smartsheet'''
         df.drop(index=df.index[0], inplace=True)
@@ -251,6 +269,7 @@ class SmartsheetRmAdmin():
         df['Description'] = df['Description'].astype(str)
         df['Units'] = pd.to_numeric(df['Units'], errors='coerce')
         return df
+    
     def aggregate_hh2_data(self, df):
         '''Filter by approval type, then turn the df into a dict with records,
         making sure to add all units in case there are two entries for the same day/job number'''
@@ -311,6 +330,7 @@ class SmartsheetRmAdmin():
         } for record in records]
     
         return flat_hh2_records
+    
     def grab_rm_timedata(self):
         '''grabs existing data from rm, translates rm job id to job number, rm user id to user email, 
         and then builds out a reference dictionary of time entries (hrs) for verifying if update is needed, adding hours for same job/time as needed
@@ -335,6 +355,7 @@ class SmartsheetRmAdmin():
                 old_number = self.rm_quickreference_hrs[key]
                 self.rm_quickreference_hrs[key] = old_number + timeentry['hours']
                 self.rm_quickreference_id[key].append(timeentry['id'])  # Directly append the new id to the list
+
     def process_timedata_discrepencies(self):
         '''compare hh2 data (on ss) w/ rm data. The end result is a list of time entries and their needed actions'''
         up_to_date, to_update, to_add, self.to_add_projntime=0,0,0,0
@@ -360,14 +381,16 @@ class SmartsheetRmAdmin():
                 else:
                     to_add += 1
                 continue
-        self.log.log(f"""Of the SS/HH2 Time Entries between {self.min_date} and {self.max_date}: 
+        self.log.info(f"""Of the SS/HH2 Time Entries between {self.min_date} and {self.max_date}: 
     {up_to_date} entries current,
     {to_update} entries needing update
     {to_add} entries need to be added
     {self.to_add_projntime} entries that first need project added, then time added""")
-        #region post data to rm
+        
+        #region post data to rm -------------------------------------------------------------------
     def post_rm_time_changes(self):
-        'processes and posts time changes. It tracks job numbers not in RM, error messages, and generally posts action results and a summary of everything it did'
+        """processes and posts time changes. It tracks job numbers not in RM, error messages, 
+        and generally posts action results and a summary of everything it did"""
         self.api_error_messages = []
         self.api_error_messages_instance, successful_update, successful_add = 0, 0, 0
         success = False
@@ -391,11 +414,12 @@ class SmartsheetRmAdmin():
 
         # summary of action
         if self.to_add_projntime > 0:
-            self.log.log(f"There was {self.to_add_projntime} instances where a time entry post was attempted on a job we didn't have in the Resouce manager, these were for job(s): {self.undeployed_job_nums}")
+            self.log.error(f"There was {self.to_add_projntime} instances where a time entry post was attempted on a job we didn't have in the Resouce manager, these were for job(s): {self.undeployed_job_nums}")
         if self.api_error_messages != []:
-            self.log.log(f"There was {self.api_error_messages_instance} instances where a time entry post failed due to api error, those errors were: {self.api_error_messages}")
+            self.log.error(f"There was {self.api_error_messages_instance} instances where a time entry post failed due to api error, those errors were: {self.api_error_messages}")
         if successful_update > 0 or successful_add > 0:
-            self.log.log(f"~~Time Entry adjustedments are complete, there was {successful_add} successful time entries added and {successful_update} successful time entries updated~~")
+            self.log.info(f"~~Time Entry adjustedments are complete, there was {successful_add} successful time entries added and {successful_update} successful time entries updated~~")
+
     def delete_old_timedata(self, timeentry):
         '''updates will add new and old hours, so we need to first delete old data before posting new'''
         result_list = []
@@ -404,6 +428,7 @@ class SmartsheetRmAdmin():
         if not all(code == 200 for code in result_list):
             timeentry['messages'].extend([f"FAILED PREPOST DELETION: incorrect hours associated with this time/user/job number failed to delete ({self.generate_now_string()})"])
         return all(code == 200 for code in result_list)
+    
     def add_new_timedata(self, timeentry):
         '''this posts the correct time data
         noting if an error was raised, or if there was no project id in RM to correspond with the job number'''
@@ -432,12 +457,14 @@ class SmartsheetRmAdmin():
             return False
         #endregion
     #endregion
-    #region Project Syncing
+
+    #region Project Syncing -------------------------------------------------------------
     def grab_proj_sheetids(self):
         '''grabs the sheet ids of projects from the workspace id'''
         self.sheet_ids = {}
         for sheet in self.smart.Workspaces.get_workspace(self.proj_workspace_id).to_dict()['sheets']:
             self.sheet_ids[sheet['name']] = sheet['id']
+
     def establish_sheet_connection(self):
         '''checks sheet names against proj names in RM (also looking to see if the sheet name minus last character (which could be *) matches something in RM. 
         if there is a match, its status is "connected", if not its status is "disconnected"'''
@@ -452,6 +479,7 @@ class SmartsheetRmAdmin():
                     break  # Exit loop early if a match is found
             status = 'connected' if connected else 'disconnected'
             self.ss_proj_list.append({'name': sheet_name, 'ss_sheet_id': self.sheet_ids[sheet_name], 'rm_id':rm_id, 'status': status})
+
     def update_sheet_name(self, sheet_info):
         '''adds star to end of all sheet names that need it'''
         if (sheet_info['status'] == "disconnected" and sheet_info['name'].endswith('*')) or (sheet_info['status'] == "connected" and not sheet_info['name'].endswith('*')):
@@ -468,9 +496,10 @@ class SmartsheetRmAdmin():
             smartsheet.models.Sheet({
                 'name': new_name}))
         except Exception as e:
-            self.log.log(f"Error updating sheet name: {e}")
+            self.log.error(f"Error updating sheet name: {e}")
+
     def grab_connected_sheet_data(self, sheet_i, sheet_info):
-        '''if the sheet is connected, grab the nessisary data'''
+        '''Grabs the relevent data from the DCT Planning sheet associated with the RM Data for comparison and update.'''
         if sheet_info['status'] == "connected":
             sheet_sum = grid(sheet_info['ss_sheet_id'])
             sheet_sum.fetch_summary_content()
@@ -488,15 +517,16 @@ class SmartsheetRmAdmin():
             self.ss_proj_list[sheet_i]['sheet_grid_obj'] = sheet_grid 
             self.ss_proj_list[sheet_i]['meta_data'] = meta_data
             self.ss_proj_list[sheet_i]['ss_assignment_data'] = ss_assignment_data
+
     def get_rmproj_metadata(self, proj):
         '''checks connected projects for sync of meta data (checking standard, and non standard Arch and Proj Enum fields seperatly), and compares. If out of sync, sounds to api call'''
         endpoint = f"/api/v1/projects/{proj['rm_id']}"
         standard_response = self.paginated_rm_getrequest(endpoint = endpoint)
         custom_response = self.paginated_rm_getrequest(endpoint = endpoint+"/custom_field_values")
-    
+        print(custom_response)
 
         if standard_response and custom_response:
-            status, status_id, arch, arch_id, enum, enum_id = '', '', '', '', '', ''
+            status, status_id, arch, arch_id, enum, enum_id, estimate, estimate_id, estimate_presented, estimate_presented_id = '', '', '', '', '', '', '', '', '', ''
             for data_field in custom_response:
                 if data_field['custom_field_name'] == "Architect":
                     arch = data_field['value'] 
@@ -507,6 +537,12 @@ class SmartsheetRmAdmin():
                 elif data_field['custom_field_name'] == "DCT Status":
                     status = data_field['value'] 
                     status_id = data_field['id']
+                elif data_field['custom_field_name'] == 'Estimate':
+                    estimate = data_field['Estimate']
+                    estimate_presented_id = data_field['id']
+                elif data_field['custom_field_name'] == 'Estimate Presented':
+                    estimate = data_field['Estimate Presented']
+                    estimate_presented_id = data_field['id']
 
             rm_proj_metadata= {
                 'job_num':standard_response['project_code'], 
@@ -526,20 +562,23 @@ class SmartsheetRmAdmin():
             return rm_proj_metadata
 
         else:
-            self.log.log(f"{proj['name']} could not be found on RM")
+            self.log.error(f"{proj['name']} could not be found on RM")
             return {'message':'error retrieving rm_proj_metadata for updating project meta data'}
-        # region updating project meta data
+        
+        # region updating project meta data ------------------------------------------------------
     def execute_conditional_rm_proj_update(self, rm_proj_metadata, proj):
         '''checks for various types of project meta data that has been found to be out of sync.
         standard data fields, tags, and custom data fields each have a different method to update'''
         if proj['meta_data'] == {}:
-            self.log.log('Smartsheet meta data is not in Summary names as expected, likely template was note used properly or adjusted')
+            self.log.error('Smartsheet meta data is not in Summary names as expected, likely template was note used properly or adjusted')
         if not(rm_proj_metadata['job_num'] == proj['meta_data']['Build Job Number'] and rm_proj_metadata['region'] == proj['meta_data']['Build Region']):
-            self. update_rm_proj_standfields(rm_proj_metadata, proj)
+            self.update_rm_proj_standfields(rm_proj_metadata, proj)
         if not(rm_proj_metadata['custom_fields'][0]['value'] == proj['meta_data']['Build Architect'] 
                and rm_proj_metadata['custom_fields'][1]['value'] == proj['meta_data']['Project Enumerator [MANUAL ENTRY]'] 
                and rm_proj_metadata['custom_fields'][2]['value'] == proj['meta_data']['DCT Status']):
             self.update_rm_proj_customfields(rm_proj_metadata, proj)
+
+
     def update_rm_proj_standfields(self, rm_proj_metadata, proj):
         '''updates project meta data that has been found to be out of sync.
         standard data fields, tags, and custom data fields each have a different method to update'''
@@ -552,10 +591,12 @@ class SmartsheetRmAdmin():
         response = requests.put(f"https://api.rm.smartsheet.com/api/v1/projects/{proj['rm_id']}", headers=self.rm_header, data=json.dumps(data))
 
         if response.status_code == 200:
-            self.log.log(f"Updated {proj['name']}'s meta data")
+            self.log.info(f"Updated {proj['name']}'s meta data")
+
+
     def update_archived_projects(self):
         '''archived project cannot have a job number // normal name b/c that may interfere with time & expense posting. To do this correctly, I need to first unarchive, then rearchive proj....'''
-        self.log.log('Updating Archived Projects as needed...')
+        self.log.info('Updating Archived Projects as needed...')
         response_dict = self.paginated_rm_getrequest(endpoint='/api/v1/projects?sort_field=created&sort_order=ascending&with_archived=true')
         self.archived_proj = []
         
@@ -563,7 +604,7 @@ class SmartsheetRmAdmin():
             if proj['archived']:
                 self.archived_proj.append(proj)
                 if proj['name'].find('ARCHIVED') == -1:
-                    self.log.log(f"""{proj['name']} starting update loop
+                    self.log.info(f"""{proj['name']} starting update loop
                                  """)
                     data1 =  {
                         'id':proj['id'],
@@ -583,10 +624,12 @@ class SmartsheetRmAdmin():
                     response3 = requests.put(f"https://api.rm.smartsheet.com/api/v1/projects/{proj['id']}", headers=self.rm_header, data=json.dumps(data3))
 
                     if response1.status_code and response2.status_code and response3.status_code == 200:
-                        self.log.log(f"Correctly Archived {proj['name']}")
+                        self.log.info(f"Correctly Archived {proj['name']}")
                     else:
-                        self.log.log(f"error with update- 1:{response1.json()} 2:{response2.json()} 3:{response3.json()}")
+                        self.log.error(f"error with update- 1:{response1.json()} 2:{response2.json()} 3:{response3.json()}")
         self.grab_rm_projids()
+
+
     def update_rm_proj_customfields(self, rm_proj_metadata,proj):
         '''updates project meta data that has been found to be out of sync.
         standard data fields, tags, and custom data fields each have a different method to update'''
@@ -599,7 +642,7 @@ class SmartsheetRmAdmin():
             elif custom_field['type'] == 'status':
                 value = proj['meta_data']['DCT Status']
             else:
-                self.log.log('failed to post custom field updates, system could not find the fields in its meta data')
+                self.log.error('failed to post custom field updates, system could not find the fields in its meta data')
 
             self.response = requests.put(
                 f"https://api.rm.smartsheet.com/api/v1/projects/{proj['rm_id']}/custom_field_values/{custom_field['rm_id']}", 
@@ -607,13 +650,12 @@ class SmartsheetRmAdmin():
                 data=json.dumps({'value':value}))
             
             if self.response.json().get('message') != "not found":
-                self.log.log(f"{proj['name']} updated its custom fields")
+                self.log.info(f"{proj['name']} updated its custom fields")
             else:
-                self.log.log(f"{proj['name']} failed to update its custom fields")
+                self.log.info(f"{proj['name']} failed to update its custom fields")
         #endregion
     #endregion
-    #region Assignments
-    
+    #region Assignments -----------------------------------------------------------------
     def grab_rm_assignment_data(self, proj):
         '''grabs rm assignment data to check if any updates are needed'''
         rm_assignment_data_raw = self.paginated_rm_getrequest(f"/api/v1/projects/{proj['rm_id']}/assignments")
@@ -634,7 +676,7 @@ class SmartsheetRmAdmin():
                 assignment_update_message[task_name] = rm_status
         if assignment_update_message != {}:
             need_to_update = True
-            self.log.log(f"changes to be made in ss: {assignment_update_message}")
+            self.log.info(f"changes to be made in ss: {assignment_update_message}")
         proj['rm_assignment_data'] = rm_assignment_data
         proj['ss_assignment_to_new_status'] = ss_assignment_to_new_status
 
@@ -645,11 +687,11 @@ class SmartsheetRmAdmin():
             try:
                 proj['sheet_grid_obj'].update_rows(proj['ss_assignment_to_new_status'], 'Task Name - Backend Key')
             except ValueError:
-                self.log.log(f'row update failed b/c row was missing from {proj["name"]} Smartsheet')
+                self.log.error(f'row update failed b/c row was missing from {proj["name"]} Smartsheet')
             except ApiError:
-                self.log.log(f'updating the {proj["name"]} assignments failed')
+                self.log.error(f'updating the {proj["name"]} assignments failed')
     #endregion
-    #region post to ss
+    #region post to ss ------------------------------------------------------------------
     def post_ss_data(self, data):
         '''posts back to ss a message if the message is different than what is currently there '''
         self.posting_data = []
@@ -666,15 +708,16 @@ class SmartsheetRmAdmin():
 
     def grab_rm_data(self):
         ''''''
-        self.log.log("""Grabbing RM Data
+        self.log.info("""Grabbing RM Data
                      """)
         self.grab_rm_userids()
         self.audit_users_emplnum()
         self.update_archived_projects()
         self.grab_rm_projids()
+
     def run_hours_update(self):
         '''runs main script as intended'''
-        self.log.log("""Time & Expense Updates:
+        self.log.info("""Time & Expense Updates:
                      """)
         self.grab_rm_userids()
         self.fetch_and_prepare_hh2_data()
@@ -686,33 +729,36 @@ class SmartsheetRmAdmin():
         else:
             self.post_ss_data([{"key":"EmployeeNumberDateJobApprovalType", 'messages':self.error_w_hh2sheet}])
         grid(self.hh2_data_sheetid).handle_update_stamps()
+
     def run_proj_metadata_update(self):
         '''katherine has mapped particular columns of her project template to meta data fields in RM, this script keeps it up to date'''
-        self.log.log("""Project Metadata Updates:
+        self.log.info("""Project Metadata Updates:
                      """)
         self.grab_proj_sheetids()
         self.establish_sheet_connection()
         tot = len(self.ss_proj_list)
+
         for proj_i, proj in enumerate(self.ss_proj_list):
-            self.log.log(f"{proj_i+1}/{tot}  Assessing {proj['name']}...")
+            self.log.info(f"{proj_i+1}/{tot}  Assessing {proj['name']}...")
             self.update_sheet_name(proj)
             if proj['status'] == 'connected':
                 try:
                     time.sleep(4)
                     self.grab_connected_sheet_data(proj_i, proj)
                 except KeyError:
-                    self.log.log(f"unknown error @{proj_i}, {proj}, skipping this project for now")
+                    self.log.error(f"unknown error @{proj_i}, {proj}, skipping this project for now")
                 
                 rm_proj_metadata = self.get_rmproj_metadata(proj)
                 
                 try:
                     self.execute_conditional_rm_proj_update(rm_proj_metadata, proj)
                 except:
-                    self.log.log('issues locating the proj metadata resulted in failed update')
+                    self.log.error('issues locating the proj metadata resulted in failed update')
         self.grab_rm_projids()
+
     def run_assignment_updates(self):
         '''assignments in rm are linked to users and projects and are line-item tasks in ss per project'''
-        self.log.log("""Project Assignment Updates:
+        self.log.info("""Project Assignment Updates:
                      """)
         try:    
             for proj in self.ss_proj_list:
@@ -724,17 +770,23 @@ class SmartsheetRmAdmin():
             self.establish_sheet_connection()
             tot = len(self.ss_proj_list)
             for proj_i, proj in enumerate(self.ss_proj_list):
-                self.log.log(f"{proj_i+1}/{tot}  Assessing {proj['name']}...")
+                self.log.info(f"{proj_i+1}/{tot}  Assessing {proj['name']}...")
                 self.grab_connected_sheet_data(proj_i, proj)
                 if proj['status'] == 'connected':
                     update = self.grab_rm_assignment_data(proj)
                     self.update_assignments_in_ss(update,proj)
+
+
 if __name__ == "__main__":
     # https://app.smartsheet.com/sheets/GffHvGGxVJwQ9P8w8gwgfqrmJjcq39JXvMQmH7q1?view=grid is hh2 data sheet
     # https://app.smartsheet.com/browse/workspaces/GXmwRM4wcCmjMVGVjhJ2cWCFR9QWMQCr5w8WGrx1 is proj workspace
+    load_dotenv("configs/.env")
+    smartsheet_automation_token = os.getenv("smartsheet_automation_token")
+    smartsheet_rm_token = os.getenv("smartsheet_rm_token")
+
     config = {
-        'smartsheet_token':smartsheet_token,
-        'rm_token': rm_token,
+        'smartsheet_token':smartsheet_automation_token,
+        'rm_token': smartsheet_rm_token,
         'hh2_data_sheetid': 1780078719487876,
         'hris_data_sheetid': 5956860349048708,
         'proj_workspace_id': 4883274435716996,
@@ -742,12 +794,11 @@ if __name__ == "__main__":
         'rm_to_ss_status_ids':{550725:'Planned', 550729:'Active', 550726:'Potential', 550730:'Completed', 684245:'Check-in', 684246:'Not Completed', 698235:'Blocked'},
         'rm_leave_type_ids':{"Vacation":8616592, "Sick":8616593, "Parental Leave":8616594}
     }
+    
     sra = SmartsheetRmAdmin(config)
     sra.grab_rm_data()
-    sra.run_proj_metadata_update()
+    # sra.run_proj_metadata_update()
     sra.run_hours_update()
-    sra.run_assignment_updates()
-    sra.log.log("""~Fin
-                     
-                """)
-    
+    # sra.run_assignment_updates()
+    sra.log.info("""~Fin""")
+
