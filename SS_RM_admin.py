@@ -19,7 +19,7 @@ class SmartsheetRmAdmin():
     def __init__(self, config):
         self.config = config
         self.apply_config(config) # '''turns all config items into self.key = value'''
-  
+        #smartsheet setup
         grid.token=self.smartsheet_token
         self.smart = smartsheet.Smartsheet(access_token=self.smartsheet_token)
         self.smart.errors_as_exceptions(True)
@@ -666,7 +666,7 @@ class SmartsheetRmAdmin():
         for assignment in rm_assignment_data_raw:
             task_name = assignment.get('description')
             rm_status_id = assignment.get('status_option_id')
-            rm_status = self.rm_to_ss_status_ids.get(rm_status_id) 
+            rm_status = self.rm_to_ss_status_ids.get(str(rm_status_id)) 
             rm_task_name_backend_key = task_name + "|" + str(self.custom_round(assignment.get('percent'), 1)) + "|" +  str(self.convert_date_format(assignment.get('starts_at'), True)) + "|" + str(self.convert_date_format(assignment.get('ends_at'), True))
             rm_assignment_data.append({rm_task_name_backend_key:rm_status})
             ss_status = proj['ss_assignment_data'].get(rm_task_name_backend_key)
@@ -780,21 +780,9 @@ class SmartsheetRmAdmin():
 if __name__ == "__main__":
     # https://app.smartsheet.com/sheets/GffHvGGxVJwQ9P8w8gwgfqrmJjcq39JXvMQmH7q1?view=grid is hh2 data sheet
     # https://app.smartsheet.com/browse/workspaces/GXmwRM4wcCmjMVGVjhJ2cWCFR9QWMQCr5w8WGrx1 is proj workspace
-    load_dotenv("configs/.env")
-    smartsheet_automation_token = os.getenv("smartsheet_automation_token")
-    smartsheet_rm_token = os.getenv("smartsheet_rm_token")
+    with open("configs/config.json", "r") as inf:
+        config = json.load(inf)
 
-    config = {
-        'smartsheet_token':smartsheet_automation_token,
-        'rm_token': smartsheet_rm_token,
-        'hh2_data_sheetid': 1780078719487876,
-        'hris_data_sheetid': 5956860349048708,
-        'proj_workspace_id': 4883274435716996,
-        'proj_list_sheetid': 3858046490306436,
-        'rm_to_ss_status_ids':{550725:'Planned', 550729:'Active', 550726:'Potential', 550730:'Completed', 684245:'Check-in', 684246:'Not Completed', 698235:'Blocked'},
-        'rm_leave_type_ids':{"Vacation":8616592, "Sick":8616593, "Parental Leave":8616594}
-    }
-    
     sra = SmartsheetRmAdmin(config)
     sra.grab_rm_data()
     # sra.run_proj_metadata_update()
