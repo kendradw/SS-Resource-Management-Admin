@@ -2,7 +2,7 @@
 import smartsheet
 from smartsheet.exceptions import ApiError
 from datetime import datetime
-from smartsheet_grid import grid
+from clients.smartsheet_grid import grid
 import requests
 import json
 import time
@@ -10,9 +10,8 @@ import os
 from dotenv import load_dotenv
 import pandas as pd
 from configs.setup_logger import setup_logger
+from auto_rm import Project
 #endregion
-
-load_dotenv("configs/.env")
 
 class SmartsheetRmAdmin():
     '''admin for DCT's Resource Management tool that is part of SS'''
@@ -24,7 +23,7 @@ class SmartsheetRmAdmin():
         self.smart = smartsheet.Smartsheet(access_token=self.smartsheet_token)
         self.smart.errors_as_exceptions(True)
         self.start_time = time.time()
-        self.log=setup_logger(__name__)
+        self.log=setup_logger(__name__, file_path="configs/log.log")
         self.rm_header = {
             'Content-Type': 'application/json',
             'auth': self.rm_token
@@ -498,6 +497,11 @@ class SmartsheetRmAdmin():
         except Exception as e:
             self.log.error(f"Error updating sheet name: {e}")
 
+    def estimate_fields(self, sheet_info):
+        # for project in self.intake_list:
+        #     if sheet_info.get("") == project.dct_sheet_id
+        pass
+
     def grab_connected_sheet_data(self, sheet_i, sheet_info):
         '''Grabs the relevent data from the DCT Planning sheet associated with the RM Data for comparison and update.'''
         if sheet_info['status'] == "connected":
@@ -505,6 +509,8 @@ class SmartsheetRmAdmin():
             sheet_sum.fetch_summary_content()
             self.parent_data= sheet_sum.df.to_dict('records')
             meta_data = {sum_field['title']: sum_field['displayValue'] for sum_field in self.parent_data if sum_field['title'] in ['Project Enumerator [MANUAL ENTRY]', 'DCT Status', 'Build Region', 'Build Job Number', 'Build Architect']}
+            #add estimate and estimate presented to metadata
+            
             sheet_grid = grid(sheet_info['ss_sheet_id'])
             sheet_grid.fetch_content()
             df = sheet_grid.df
@@ -539,10 +545,6 @@ class SmartsheetRmAdmin():
                     status_id = data_field['id']
                 elif data_field['custom_field_name'] == 'Estimate':
                     estimate = data_field['Estimate']
-                    estimate_presented_id = data_field['id']
-                elif data_field['custom_field_name'] == 'Estimate Presented':
-                    estimate = data_field['Estimate Presented']
-                    estimate_presented_id = data_field['id']
 
             rm_proj_metadata= {
                 'job_num':standard_response['project_code'], 
@@ -556,7 +558,7 @@ class SmartsheetRmAdmin():
                     'rm_id':enum_id},
                     {'type': 'status',
                     'value':status,
-                    'rm_id':status_id}                   
+                    'rm_id':status_id}
                 ]}
             
             return rm_proj_metadata
@@ -785,8 +787,9 @@ if __name__ == "__main__":
 
     sra = SmartsheetRmAdmin(config)
     sra.grab_rm_data()
-    # sra.run_proj_metadata_update()
+    # this can get skipped is now done in auto_rm
+    # sra.run_proj_metadata_update() 
     sra.run_hours_update()
-    # sra.run_assignment_updates()
+    sra.run_assignment_updates()
     sra.log.info("""~Fin""")
 
