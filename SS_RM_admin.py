@@ -778,18 +778,23 @@ class SmartsheetRmAdmin():
                     update = self.grab_rm_assignment_data(proj)
                     self.update_assignments_in_ss(update,proj)
 
+    def run_all(self):
+        self.grab_rm_data()
+        self.run_hours_update()
+        self.run_assignment_updates()
+        self.log.info("""~Fin""")
 
-if __name__ == "__main__":
-    # https://app.smartsheet.com/sheets/GffHvGGxVJwQ9P8w8gwgfqrmJjcq39JXvMQmH7q1?view=grid is hh2 data sheet
-    # https://app.smartsheet.com/browse/workspaces/GXmwRM4wcCmjMVGVjhJ2cWCFR9QWMQCr5w8WGrx1 is proj workspace
-    with open("configs/config.json", "r") as inf:
-        config = json.load(inf)
+# if __name__ == "__main__":
+#     # https://app.smartsheet.com/sheets/GffHvGGxVJwQ9P8w8gwgfqrmJjcq39JXvMQmH7q1?view=grid is hh2 data sheet
+#     # https://app.smartsheet.com/browse/workspaces/GXmwRM4wcCmjMVGVjhJ2cWCFR9QWMQCr5w8WGrx1 is proj workspace
+#     with open("configs/config.json", "r") as inf:
+#         config = json.load(inf)
 
-    sra = SmartsheetRmAdmin(config)
-    sra.grab_rm_data()
-    # this can get skipped is now done in auto_rm
-    # sra.run_proj_metadata_update() 
-    sra.run_hours_update()
-    sra.run_assignment_updates()
-    sra.log.info("""~Fin""")
+#     sra = SmartsheetRmAdmin(config)
+#     sra.grab_rm_data()
+#     # this can get skipped is now done in auto_rm
+#     # sra.run_proj_metadata_update() 
+#     sra.run_hours_update()
+#     sra.run_assignment_updates()
+#     sra.log.info("""~Fin""")
 
