@@ -11,16 +11,6 @@ import time
 
 LOG_FILE_PATH = "configs/log.log"
 
-# --------------------- GUI Logger Handler ---------------------
-class GuiLogHandler(logging.Handler):
-    def emit(self, record):
-        msg = self.format(record)
-        tag = "error" if record.levelno >= logging.ERROR else None
-        log_box.config(state=tk.NORMAL)
-        log_box.insert(tk.END, msg + "\n", tag)
-        log_box.see(tk.END)
-        log_box.config(state=tk.DISABLED)
-
 # --------------------- File Tailer (Live Log File Output) ---------------------
 def tail_log_file(file_path, interval=0.5):
     def follow():
@@ -37,18 +27,8 @@ def tail_log_file(file_path, interval=0.5):
                     log_box.see(tk.END)
                     log_box.config(state=tk.DISABLED)
         except FileNotFoundError:
-            log_message(f"⚠ Log file not found: {file_path}")
+            log_message(f"Log file not found: {file_path}")
     threading.Thread(target=follow, daemon=True).start()
-
-# --------------------- Logging Setup ---------------------
-def setup_gui_logging():
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)
-    if not any(isinstance(h, GuiLogHandler) for h in root_logger.handlers):
-        gui_handler = GuiLogHandler()
-        gui_handler.setLevel(logging.INFO)
-        gui_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%H:%M:%S'))
-        root_logger.addHandler(gui_handler)
 
 # --------------------- Button Logic ---------------------
 def log_message(text):
@@ -84,7 +64,10 @@ def confirm_and_run(action_name, action_fn):
 def run_project_updates():
     rmm = AutoRM()
     logging.info("Updating Projects...")
-    rmm.update_projects()
+    #TODO: replace this back so it fetches new projects. 
+    # rmm.update_projects()
+    rmm.fetch_intake()
+    rmm._todo_handler()
     messagebox.showinfo("Complete", "Project updates complete.")
 
 # --------------------- Run Time Updates  ------------------------
@@ -196,8 +179,7 @@ log_box = scrolledtext.ScrolledText(
 log_box.pack(padx=20, fill=tk.BOTH, expand=True, pady=(0, 15))
 log_box.tag_config("error", foreground="red")
 
-# Init logging and log file tailer
-setup_gui_logging()
+# Init log file tailer
 tail_log_file(LOG_FILE_PATH)
 
 # Launch GUI

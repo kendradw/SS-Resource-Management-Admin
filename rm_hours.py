@@ -2,7 +2,7 @@
 import smartsheet
 from smartsheet.exceptions import ApiError
 from datetime import datetime
-from smartsheet_grid import grid
+from clients.smartsheet_grid import grid
 import requests
 import json
 import time

@@ -30,7 +30,9 @@ class SmartsheetBot:
         self.wait = WebDriverWait(self.driver, 100)
 
     #region Log-in to Smartsheet ---------------------------------------------------------------------
-    def login(self):
+    def auto_login(self):
+        """Auto login to smartsheet with automation@dowbuilt.com account"""
+
         self.driver.get("https://app.smartsheet.com/b/home")
 
         # Email input
@@ -57,6 +59,8 @@ class SmartsheetBot:
         return
       
     def user_login_manual(self):
+        """Waits for the user to manually enter their username, password, and authenticate through MFA. 
+        Will wait 200 seconds. """
         self.driver.get("https://app.smartsheet.com/b/home")
         self.log.info("Please log in manually...")
 
@@ -71,6 +75,10 @@ class SmartsheetBot:
         return
 
     def user_login_auto(self):
+        """Will input user log-in data for microsoft logi-in requires user MFA Verification. """
+
+        username = crypter.decrypt_from_config("user")
+        password = crypter.decrypt_from_config("pass")
  
         self.driver.get("https://app.smartsheet.com/b/home")
 
@@ -78,7 +86,7 @@ class SmartsheetBot:
         self.wait.until(EC.element_to_be_clickable((By.ID, "azureButton"))).click()
 
         #Enter email
-        self.wait.until(EC.presence_of_element_located((By.ID, "i0116"))).send_keys(crypter.decrypt_from_config("user"))
+        self.wait.until(EC.presence_of_element_located((By.ID, "i0116"))).send_keys(username)
         for _ in range(3):
             try:
                 self.wait.until(EC.element_to_be_clickable((By.ID, "idSIButton9"))).click()
@@ -87,7 +95,7 @@ class SmartsheetBot:
                 time.sleep(1)
 
         #Enter password
-        self.wait.until(EC.presence_of_element_located((By.ID, "i0118"))).send_keys(crypter.decrypt_from_config("pass"))
+        self.wait.until(EC.presence_of_element_located((By.ID, "i0118"))).send_keys(password)
         for _ in range(3):
             try:
                 self.wait.until(EC.element_to_be_clickable((By.ID, "idSIButton9"))).click()
@@ -112,19 +120,19 @@ class SmartsheetBot:
     def track_workload(self, sheet_url):
         self.driver.get(sheet_url)
         time.sleep(2)
-
+        self.wait_short = WebDriverWait(self.driver, 30)
         try:
             # #Click Resource Management tab
             # resource_tab = self.wait.until(
             #     EC.element_to_be_clickable((By.ID, "rtr-16"))
             # )
             # resource_tab.click()
-            # time.sleep(2)
+            # time.sleep(2) ---
 
             # Click Resource Management tab
             # Check if workload button is already visible (i.e., RM tab is already open)
             try:
-                workload_btn = self.wait.until(
+                workload_btn = self.wait_short.until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, 'button[data-client-id="tk-landing-panel-track-workload-btn"]'))
                 )
                 self.log.info("RM tab already open.")
@@ -138,11 +146,14 @@ class SmartsheetBot:
                 time.sleep(2)  # give it time to load
 
             # lick "Track workload" button
-            workload_btn = self.wait.until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[data-client-id="tk-landing-panel-track-workload-btn"]'))
-            )
-            workload_btn.click()
-            self.log.info(f"Tracked workload for: {sheet_url}")
+            try:
+                workload_btn = self.wait.until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[data-client-id="tk-landing-panel-track-workload-btn"]'))
+                )
+                workload_btn.click()
+                self.log.info(f"Tracked workload for: {sheet_url}")
+            except Exception as e:
+                self.log.info(f"Track Workload button not found. RM Projects possibly already created for {sheet_url}")
 
             #Click "Connect Project" button
             connect_btn = self.wait.until(
@@ -164,8 +175,9 @@ class SmartsheetBot:
             self.log.info("Browser session closed.")
         else:
             self.log.info("No browser session to close.")
-
-
+    #destructor
+    def __del__(self):
+        self.close()
 
 # # usage
 # if __name__ == "__main__":
