@@ -59,6 +59,19 @@ from smartsheet_bot import SmartsheetBot # for automating smartsheet workload tr
 from configs.setup_logger import setup_logger # for logging
 from clients.smartsheet_grid import grid # for getting data from smartsheet grid
 import configs.crypter as crypter
+import sys
+
+def get_resource_path(relative_path):
+    """Resolves path to bundled or script-relative resource"""
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
+def get_writable_path(relative_path):
+    # Use %APPDATA% or local working dir
+    base = os.getenv("APPDATA") or os.path.abspath(".")
+    return os.path.join(base, relative_path)
+
 
 @dataclass
 class Project:
@@ -82,20 +95,24 @@ class Project:
     dct_grid_url: str = ""              #URL to DCT Planning Sheet
     dct_enum_field_id: int = None       #DCT Planning ENUMERATOR field ID to update with enumerator
     dct_enum_field_set: bool = False    #DCT Planning ENUMERATOR field set indicator
-    
+
+
 class AutoRM():
 
     def __init__(self):
         #logger
-        self.log = setup_logger(__name__, file_path="configs/log.log")
+        log_path = get_writable_path("DCT_RM_Tools/log.log")
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        self.log = setup_logger(__name__, file_path=get_writable_path("DCT_RM_Tools/log.log"))
         self.log.info("Initializing RMManager...")
         
         #load config
-        with open("configs/config.json", "r") as inf:
+        config_path = get_resource_path("configs/config.json")
+        with open(config_path, "r") as inf:
             self.config = json.load(inf)
 
+
         #tokens 
-        load_dotenv("configs\.env")
         self.rm_token = crypter.decrypt_from_config("rm_token")
         self.ss_token = crypter.decrypt_from_config("ss_auto_token")
         self.ss_username = self.config.get("ss_username")
@@ -603,54 +620,54 @@ class AutoRM():
         
     #endregion
 
-def main():
-    rmm = AutoRM()
-    rmm.update_projects()
+# def main():
+#     rmm = AutoRM()
+#     rmm.update_projects()
     
-    # #rmm.fetch_new_dct_projects()
-    # p= Project(name='_TEST IT 2.7*', enum='01151', dct_status='status', estimate='estimate', estimate_presented='ep', dct_sheet_id=4834941121548164, rm_project_bool=True, dct_grid_bool='', dct_grid_url='https://app.smartsheet.com/sheets/jphh9fwHW267hcvRq5m25PgwVpGVc34FXcvHFFv1', dct_enum_field_id=6231669148176260)
-    # # p = Project(name= "_Test Formula2", enum="01151", dct_status='status', estimate='estimate', estimate_presented='ep', dct_sheet_id=2687330368311172)
-    # # #rmm.create_DCT_grid(p)
-    # # # # print(p)
-    # # # p = rmm._add_dct_grid_enum(p)
-    # # print(p)
-    # #rmm._fetch_template()
-    # rmm._add_dct_grid_enum(project=p)
+#     # #rmm.fetch_new_dct_projects()
+#     # p= Project(name='_TEST IT 2.7*', enum='01151', dct_status='status', estimate='estimate', estimate_presented='ep', dct_sheet_id=4834941121548164, rm_project_bool=True, dct_grid_bool='', dct_grid_url='https://app.smartsheet.com/sheets/jphh9fwHW267hcvRq5m25PgwVpGVc34FXcvHFFv1', dct_enum_field_id=6231669148176260)
+#     # # p = Project(name= "_Test Formula2", enum="01151", dct_status='status', estimate='estimate', estimate_presented='ep', dct_sheet_id=2687330368311172)
+#     # # #rmm.create_DCT_grid(p)
+#     # # # # print(p)
+#     # # # p = rmm._add_dct_grid_enum(p)
+#     # # print(p)
+#     # #rmm._fetch_template()
+#     # rmm._add_dct_grid_enum(project=p)
 
     
-    # #compare existing pl to dct planning
-    # rmm.retroactive_DCT_grid()
-    #endregion ------------------------------------------
+#     # #compare existing pl to dct planning
+#     # rmm.retroactive_DCT_grid()
+#     #endregion ------------------------------------------
 
-    # # Selenium
-    # rmm.initialize_selenium()
+#     # # Selenium
+#     # rmm.initialize_selenium()
 
-    # # RM handling
-    #rmm.fetch_rm_projects()
-    # print(rmm.get_rm_custom_fields(9038651))
+#     # # RM handling
+#     #rmm.fetch_rm_projects()
+#     # print(rmm.get_rm_custom_fields(9038651))
 
-    # p = Project(name='_TEST Auto_RM', enum='01244', dct_status='Closed', estimate='$7,050,000', estimate_presented=None, row_id=8478043445661572, rm_project_bool=False, dct_grid_bool=True, rm_project_id=None, dct_sheet_id=7554767950663556, dct_grid_url='https://app.smartsheet.com/sheets/w7gPJ6vpWxRhXh4JGC75m7f4V6PrPCwwr3fJrpv1', dct_enum_field_id=None, dct_enum_field_set=True)
-    # rmm.todo_list = [p]
-    # # rmm.create_rm_projects()
+#     # p = Project(name='_TEST Auto_RM', enum='01244', dct_status='Closed', estimate='$7,050,000', estimate_presented=None, row_id=8478043445661572, rm_project_bool=False, dct_grid_bool=True, rm_project_id=None, dct_sheet_id=7554767950663556, dct_grid_url='https://app.smartsheet.com/sheets/w7gPJ6vpWxRhXh4JGC75m7f4V6PrPCwwr3fJrpv1', dct_enum_field_id=None, dct_enum_field_set=True)
+#     # rmm.todo_list = [p]
+#     # # rmm.create_rm_projects()
 
-    # #update intake sheet
-    # rmm.update_intake_rows()
+#     # #update intake sheet
+#     # rmm.update_intake_rows()
 
-    #standard fields
-    # fields = rmm._get_rm_fields(10441467, standard=True)
-    # print(fields)
+#     #standard fields
+#     # fields = rmm._get_rm_fields(10441467, standard=True)
+#     # print(fields)
 
-    #checking update/post to SS
-    # rmm.fetch_intake() #get the intak elist
-    # rmm.update_rm_project_data()
-    # rmm.update_intake_rows() 
+#     #checking update/post to SS
+#     # rmm.fetch_intake() #get the intak elist
+#     # rmm.update_rm_project_data()
+#     # rmm.update_intake_rows() 
 
-    #Main flow ------------------------------------------
-    # rmm.fetch_new_dct_projects() # fetch new projects from DCT RM Intake sheet
-    # rmm.todo_handler() # handle todo list
+#     #Main flow ------------------------------------------
+#     # rmm.fetch_new_dct_projects() # fetch new projects from DCT RM Intake sheet
+#     # rmm.todo_handler() # handle todo list
 
 
-main()
+# main()
 
 
 
