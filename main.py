@@ -64,10 +64,7 @@ def confirm_and_run(action_name, action_fn):
 def run_project_updates():
     rmm = AutoRM()
     logging.info("Updating Projects...")
-    #TODO: replace this back so it fetches new projects. 
-    # rmm.update_projects()
-    rmm.fetch_intake()
-    rmm._todo_handler()
+    rmm.update_projects()
     messagebox.showinfo("Complete", "Project updates complete.")
 
 # --------------------- Run Time Updates  ------------------------

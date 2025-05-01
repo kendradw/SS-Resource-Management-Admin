@@ -86,7 +86,7 @@ User interface for selecting specific update tasks.
 - Automates the full process for deployment to Digital Oceans & Cron Job
 
 
-# Notes
+## Notes
 
 ## Assumptions
 - The `auto_rm.py` script assumes a `<PROJECT NAME> Template` exists in the DCT planning workspace.

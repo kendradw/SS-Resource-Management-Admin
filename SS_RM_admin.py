@@ -709,7 +709,7 @@ class SmartsheetRmAdmin():
     #endregion
 
     def grab_rm_data(self):
-        ''''''
+        '''This updates archived projects.'''
         self.log.info("""Grabbing RM Data
                      """)
         self.grab_rm_userids()

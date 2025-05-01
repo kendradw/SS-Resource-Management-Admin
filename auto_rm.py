@@ -128,15 +128,15 @@ class AutoRM():
         self.add_new_rows(enum_list) #add the new rows to smartsheet by enum, this will reference the other data
         time.sleep(10) #give it some time to thinky first
         self.fetch_intake() #get that newly updated intake sheet, adds projects to self.todo_list
-        self.todo_handler() #now it's time to process that todo_list
+        self._todo_handler() #now it's time to process that todo_list
 
-    def todo_handler(self):
+    def _todo_handler(self):
         """
         Add dct project
         Add rm project
         update smartsheet
         """
-        """Handles list of todo items by sending them to DCT Grid maker then RM Project maker"""
+        """Handles list of todo items by sending them to DCT Grid maker then RM Project maker, then posts updates to smartsheet"""
         if len(self.todo_list) == 0:
             self.log.info("No todo items...")
             return
@@ -182,7 +182,7 @@ class AutoRM():
                 row_id=row["id"],
                 name=row["NAME"],
                 enum=row["ENUMERATOR"],
-                architect=["ARCHITECT"],
+                architect=row["ARCHITECT"],
                 estimate=row["ESTIMATE"],
                 dct_status=row["DCT Status"],
                 estimate_presented=row["Estimate Presented"],
@@ -207,6 +207,7 @@ class AutoRM():
         intake_cols = self._get_column_map(self.DCT_RM_INTAKE_SHEET_ID)
         # create a list of rows to update
         updated_rows = []
+        updated_projects = []
         for project in self.todo_list:
             # Create row object
             row = smartsheet.models.Row()
@@ -223,27 +224,31 @@ class AutoRM():
                 if cell: #append only non null values
                     row.cells.append(cell)
             updated_rows.append(row)
+            updated_projects.append(project.name)
         # Submit update to Smartsheet
         if updated_rows:
             response = self.smart.Sheets.update_rows(self.DCT_RM_INTAKE_SHEET_ID, updated_rows)
             if response.message == "SUCCESS":
-                self.log.info(f"Updated {len(updated_rows)} rows in DCT RM Intake sheet")
+                self.log.info(f"Updated {len(updated_rows)} rows in DCT RM Intake sheet: Projects: {updated_projects}")
             else:
                 self.log.error(f"Failed to update rows in DCT RM Intake sheet: {response.message} TODO LIST: {self.todo_list}")
 
     def fetch_new_enums(self):
-        """Fetches projects that need to be added to the intake sheet"""
+        """Fetches projects that need to be added to the intake sheet.
+        Checks projects on the DCT PL Mirror sheet, will grab all enums where "DCT Status" is not null, complete, closed, or inactive.
+        Will create grid and RM sheet for these."""
+        self.log.info(f"Looking for new projects...")
         dct_pl = grid(self.DCT_PL_MIRROR_SHEET_ID)
         dct_intake = grid(self.DCT_RM_INTAKE_SHEET_ID)
         dct_pl.fetch_content()
         dct_intake.fetch_content()
 
         #filter to relevant columns and clean mising enumerators
-        filtered_pl = dct_pl.df[["ENUMERATOR", "NAME", "STATUS"]]
-        #status is either active or inactive
-        filtered_pl = filtered_pl[
-            (filtered_pl["STATUS"].isin(["Active", "Inactive"]))
-        ] 
+        filtered_pl = dct_pl.df[["ENUMERATOR", "NAME", "STATUS", "DCT Status"]]
+        #DCT Status is not inactive, complete, or closed and not None
+        filtered_pl = filtered_pl[~filtered_pl["DCT Status"].isin(["Inactive", "Complete", "Closed"])]
+        filtered_pl = filtered_pl[filtered_pl["DCT Status"].notna()]
+
         # reduce to just enumerators
         filtered_intake = dct_intake.df[["ENUMERATOR"]]
         filtered_intake = filtered_intake[filtered_intake["ENUMERATOR"].notna()] #skip any blank rows
@@ -252,6 +257,7 @@ class AutoRM():
         missing_enum_rows = filtered_pl[~filtered_pl["ENUMERATOR"].isin(filtered_intake["ENUMERATOR"])].drop_duplicates()
         #convert to list
         missing_enums = missing_enum_rows["ENUMERATOR"].dropna().unique().tolist()
+        self.log.info(f"Found {len(missing_enums)} new projects.")
         return missing_enums     
 
     def add_new_rows(self, enum_list: list[int]):
@@ -403,8 +409,8 @@ class AutoRM():
         self.log.info("auto_rm Initializing Smartsheet Bot for RM...") 
         smartbot = SmartsheetBot(self.ss_username, self.ss_password, headless=False)
         #TODO: replace with non-user log in
-        smartbot.user_login_auto()
-        self.log.info("Logged in to Smartsheet Bot for RM...")
+        smartbot.auto_login()
+        self.log.info(f"Logged in to {self.ss_username} Smartsheet account for RM bot...")
         created_projects = False # flag to check if any projects were created
         for project in self.todo_list: # loop through projects in todo list
             # Create new RM project
@@ -433,20 +439,19 @@ class AutoRM():
         #TODO: pull only projects that were created today to improve efficiency
         #Get all projects in RM
         endpoint = "/api/v1/projects"
-        headers = {
+        self.rm_header = {
             "auth": self.rm_token,
             "Content-Type": "application/json",
             "per_page": "1000",
         }
-        data = self.paginated_rm_getrequest(endpoint, headers)
-
-        with open("data/rm_projects.json", "w") as of:
-            json.dump(data, of, indent=2)
+        data = self.paginated_rm_getrequest(endpoint, self.rm_header)
+        #TODO: Delete print for debugging
+        # with open("data/rm_projects.json", "w") as of:
+        #     json.dump(data, of, indent=2)
         for project in data: # loop through projects
             name = str(project["name"])
             self.rm_projects_dict[name] = project["id"] #assign project ID to enum
-        self.log.info(f"RM Projects: {len(self.rm_projects_dict)}")
-        self.log.info(f"LEN OF RAW DATA: {len(data)}")
+        self.log.info(f"Total RM Projects: {len(self.rm_projects_dict)}")
         return self.rm_projects_dict
     
     def paginated_rm_getrequest(self, endpoint, header, params=None,):
@@ -512,7 +517,7 @@ class AutoRM():
                     project.rm_project_id = rm_projects[project.name]
                     project.rm_project_bool = True
                 #Check if summary fields need updates
-                self.log.info(f"Found RM Project '{project.name}'. Updating summary fields...")
+                self.log.info(f"Found RM Project '{project.name}'. Checking summary fields...")
                 self.rm_field_updates(project)
             else: #if its not in the RM list, a project didn't get created :(
                 self.failed_rm_projects.append(project)
@@ -538,7 +543,7 @@ class AutoRM():
             value = field["value"]
             if field_name == "DCT Status":
                 if value != project.dct_status:
-                    update_custom[field.get("id")] == project.dct_status
+                    update_custom[field.get("id")] = project.dct_status
             elif field_name == "Project Enumerator":
                 if value != project.enum:
                     update_custom[field.get("id")] = project.enum
@@ -550,12 +555,13 @@ class AutoRM():
                     update_custom[field.get("id")] = project.estimate
             elif field_name == "Estimate Presented?":
                 if value != project.estimate_presented:
-                    update_custom[field.get("id")] = project.estimate_presented
+                    if project.estimate_presented: #this can be null for the initial "no"
+                        update_custom[field.get("id")] = project.estimate_presented
         #send the new updates to get posted
         for id, value in update_custom.items():
             if value:
                 self._post_custom_field(id, value, project)
-                self.log.info(f"Updating custom field {id} for project {project.name}")
+                self.log.info(f"Updating custom field {id} to value: {value} for project {project.name}")
         #now, we check the standard fields. there's only really two to worry about I guess
         fields = self._get_rm_fields(project.rm_project_id, standard=True)
         if fields.get("ciient") != project.client or fields.get("project_code") != project.project_code:
@@ -599,6 +605,8 @@ class AutoRM():
 
 def main():
     rmm = AutoRM()
+    rmm.update_projects()
+    
     # #rmm.fetch_new_dct_projects()
     # p= Project(name='_TEST IT 2.7*', enum='01151', dct_status='status', estimate='estimate', estimate_presented='ep', dct_sheet_id=4834941121548164, rm_project_bool=True, dct_grid_bool='', dct_grid_url='https://app.smartsheet.com/sheets/jphh9fwHW267hcvRq5m25PgwVpGVc34FXcvHFFv1', dct_enum_field_id=6231669148176260)
     # # p = Project(name= "_Test Formula2", enum="01151", dct_status='status', estimate='estimate', estimate_presented='ep', dct_sheet_id=2687330368311172)
@@ -629,8 +637,13 @@ def main():
     # rmm.update_intake_rows()
 
     #standard fields
-    fields = rmm._get_rm_fields(10441467, standard=True)
-    print(fields)
+    # fields = rmm._get_rm_fields(10441467, standard=True)
+    # print(fields)
+
+    #checking update/post to SS
+    # rmm.fetch_intake() #get the intak elist
+    # rmm.update_rm_project_data()
+    # rmm.update_intake_rows() 
 
     #Main flow ------------------------------------------
     # rmm.fetch_new_dct_projects() # fetch new projects from DCT RM Intake sheet
