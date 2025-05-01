@@ -2,6 +2,12 @@ import logging
 import sys
 import os
 
+def get_resource_path(relative_path):
+    """Resolves path to bundled or script-relative resource"""
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
 class ColoredFormatter(logging.Formatter):
     """Formatter for applying ANSI colors to log messages for console output."""
     COLORS = {
@@ -14,22 +20,24 @@ class ColoredFormatter(logging.Formatter):
 
     def format(self, record):
         formatted_message = super().format(record)
-
         log_color = self.COLORS.get(record.levelno, "")
         reset_color = "\033[0m"
         return f"{log_color}{formatted_message}{reset_color}"
 
-def setup_logger(name=None, level=logging.INFO, log_to_file=True, file_path="log.log"):
+def setup_logger(name=None, level=logging.INFO, log_to_file=True, file_path="configs/log.log"):
     """
     Set up a logger with:
     - Colored output for the console.
     - Plain text logs for files.
-
-    :param name: Logger name (usually __name__).
-    :param level: Logging level (default: logging.INFO).
-    :param log_to_file: Default True, log messages are written to `file_path`.
-    :param file_path: Path of the log file. Default: "configs/log.log" 
-    :return: Configured logger.
+    
+    Args:
+        name (str): Logger name (usually __name__).
+        level (int): Logging level.
+        log_to_file (bool): Whether to also log to a file.
+        file_path (str): Log file path (relative to script or bundle).
+    
+    Returns:
+        logging.Logger: Configured logger.
     """
     logger = logging.getLogger(name)
     logger.setLevel(level)
@@ -50,13 +58,16 @@ def setup_logger(name=None, level=logging.INFO, log_to_file=True, file_path="log
 
     # File Handler (Plain Text, No Colors)
     if log_to_file:
-        file_handler = logging.FileHandler(file_path)
+        resolved_log_path = get_resource_path(file_path)
+        os.makedirs(os.path.dirname(resolved_log_path), exist_ok=True)
+
+        file_handler = logging.FileHandler(resolved_log_path)
         file_handler.setLevel(level)
-        plain_formatter = logging.Formatter(  # Standard formatter (NO colors)
+        plain_formatter = logging.Formatter(
             '%(asctime)s [%(levelname)s] %(filename)s - %(name)s - %(funcName)s:%(lineno)d - %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
         )
-        file_handler.setFormatter(plain_formatter)  # Ensure this formatter is applied
+        file_handler.setFormatter(plain_formatter)
         logger.addHandler(file_handler)
 
     return logger

@@ -11,6 +11,18 @@ from dotenv import load_dotenv
 import pandas as pd
 from configs.setup_logger import setup_logger
 from auto_rm import Project
+import sys
+
+def get_resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
+def get_writable_path(relative_path):
+    # Use %APPDATA% or local working dir
+    base = os.getenv("APPDATA") or os.path.abspath(".")
+    return os.path.join(base, relative_path)
+
 #endregion
 
 class SmartsheetRmAdmin():
@@ -23,7 +35,12 @@ class SmartsheetRmAdmin():
         self.smart = smartsheet.Smartsheet(access_token=self.smartsheet_token)
         self.smart.errors_as_exceptions(True)
         self.start_time = time.time()
-        self.log=setup_logger(__name__, file_path="configs/log.log")
+
+        #logger
+        log_path = get_writable_path("DCT_RM_Tools/log.log")
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        self.log = setup_logger(__name__, file_path=get_writable_path("DCT_RM_Tools/log.log"))
+
         self.rm_header = {
             'Content-Type': 'application/json',
             'auth': self.rm_token

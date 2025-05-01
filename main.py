@@ -7,9 +7,28 @@ import json
 import logging
 import traceback
 import os
+import smartsheet
+import smartsheet.models
+from smartsheet.models import Workspace
+from smartsheet.workspaces import Workspaces
+from smartsheet.models import Sheet
+from smartsheet.sheets import Sheets
 import time
+import sys
 
-LOG_FILE_PATH = "configs/log.log"
+def get_resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
+def get_log_file_path():
+    base_dir = os.getenv("APPDATA") or os.path.abspath(".")
+    log_dir = os.path.join(base_dir, "DCT_RM_Tools")
+    os.makedirs(log_dir, exist_ok=True)
+    return os.path.join(log_dir, "log.log")
+
+LOG_FILE_PATH = get_log_file_path()
+
 
 # --------------------- File Tailer (Live Log File Output) ---------------------
 def tail_log_file(file_path, interval=0.5):
@@ -69,7 +88,7 @@ def run_project_updates():
 
 # --------------------- Run Time Updates  ------------------------
 def run_time_updates():
-    with open("configs/config.json", "r") as f:
+    with open(get_resource_path("configs/config.json"), "r") as f:
         config = json.load(f)
     logging.info("Running hours and assignment updates...")
     sra = SmartsheetRmAdmin(config)
@@ -79,7 +98,7 @@ def run_time_updates():
 
 # --------------------- Run Time Updates  ------------------------
 def run_assignment_updates():
-    with open("configs/config.json", "r") as f:
+    with open(get_resource_path("configs/config.json"), "r") as f:
         config = json.load(f)
     logging.info("Running hours and assignment updates...")
     sra = SmartsheetRmAdmin(config)
@@ -96,6 +115,7 @@ def run_all_updates():
 # ---------------------- Quit  ----------------------------------
 def quit_app():
     root.destroy()
+    sys.exit()
 
 def style_button(btn, bg_color, fg_color, hover_color):
     btn.configure(bg=bg_color, fg=fg_color, activebackground=hover_color, relief="flat", cursor="hand2", bd=0)
