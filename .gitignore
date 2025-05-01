@@ -1,0 +1,26 @@
+# Ignore virtual environment files
+venv/
+*.venv/
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignore environment files
+.env
+
+# Ignore Jupyter Notebooks
+*.ipynb
+
+# Ignore logs
+*.log      
+
+# Ignore json files (including config.json)
+*.json  
+
+# Ignore PyInstaller output
+*.exe
+*.spec
+build/
+dist/
