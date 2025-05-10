@@ -2,11 +2,17 @@ import logging
 import sys
 import os
 
-def get_resource_path(relative_path):
-    """Resolves path to bundled or script-relative resource"""
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, relative_path)
-    return os.path.join(os.path.abspath("."), relative_path)
+# def get_resource_path(relative_path):
+#     """Resolves path to bundled or script-relative resource"""
+#     if hasattr(sys, '_MEIPASS'):
+#         return os.path.join(sys._MEIPASS, relative_path)
+#     return os.path.join(os.path.abspath("."), relative_path)
+
+def get_log_file_path():
+    base_dir = os.getenv("APPDATA") or os.path.abspath(".")
+    log_dir = os.path.join(base_dir, "DCT_RM_Tools")
+    os.makedirs(log_dir, exist_ok=True)
+    return os.path.join(log_dir, "log.log")
 
 class ColoredFormatter(logging.Formatter):
     """Formatter for applying ANSI colors to log messages for console output."""
@@ -24,7 +30,7 @@ class ColoredFormatter(logging.Formatter):
         reset_color = "\033[0m"
         return f"{log_color}{formatted_message}{reset_color}"
 
-def setup_logger(name=None, level=logging.INFO, log_to_file=True, file_path="configs/log.log"):
+def setup_logger(name=None, level=logging.INFO, log_to_file=True):
     """
     Set up a logger with:
     - Colored output for the console.
@@ -39,6 +45,8 @@ def setup_logger(name=None, level=logging.INFO, log_to_file=True, file_path="con
     Returns:
         logging.Logger: Configured logger.
     """
+    
+    file_path=get_log_file_path()
     logger = logging.getLogger(name)
     logger.setLevel(level)
     logger.propagate = False
@@ -58,7 +66,7 @@ def setup_logger(name=None, level=logging.INFO, log_to_file=True, file_path="con
 
     # File Handler (Plain Text, No Colors)
     if log_to_file:
-        resolved_log_path = get_resource_path(file_path)
+        resolved_log_path = get_log_file_path()
         os.makedirs(os.path.dirname(resolved_log_path), exist_ok=True)
 
         file_handler = logging.FileHandler(resolved_log_path)
@@ -69,5 +77,6 @@ def setup_logger(name=None, level=logging.INFO, log_to_file=True, file_path="con
         )
         file_handler.setFormatter(plain_formatter)
         logger.addHandler(file_handler)
+    
 
     return logger

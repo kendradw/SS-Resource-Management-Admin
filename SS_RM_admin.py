@@ -13,6 +13,7 @@ from configs.setup_logger import setup_logger
 from auto_rm import Project
 import sys
 
+
 def get_resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path)
@@ -39,7 +40,7 @@ class SmartsheetRmAdmin():
         #logger
         log_path = get_writable_path("DCT_RM_Tools/log.log")
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
-        self.log = setup_logger(__name__, file_path=get_writable_path("DCT_RM_Tools/log.log"))
+        self.log = setup_logger(__name__)
 
         self.rm_header = {
             'Content-Type': 'application/json',
@@ -146,7 +147,7 @@ class SmartsheetRmAdmin():
         self.email_to_userid={}
         self.email_to_sageid = {}
         for user in response_dict:
-            if user['email'] is not None:
+            if user['email'] is not None and user['email'] != "automation@dowbuilt.com":
                 self.rm_user_list.append({'email': user['email'].lower(), 'rm_usr_id':  user['id'], 'name': user['display_name'], 'sage id': user['employee_number']})
                 self.sageid_to_email[user['employee_number']] = user['email'].lower()
                 self.email_to_sageid[user['email'].lower()] = user['employee_number']
@@ -632,7 +633,7 @@ class SmartsheetRmAdmin():
                     data2 = {
                         'id':proj['id'],
                         'project_code':" ",
-                        'name': f"{proj['name']}_ARCHIVED"
+                        'name': f"{proj['name']}"
                     }
                     data3 ={
                         'id':proj['id'],

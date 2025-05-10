@@ -12,8 +12,7 @@ def get_resource_path(relative_path):
     return os.path.join(os.path.abspath("."), relative_path)
 
 # Updated log file path (logs to same dir as .py or .exe)
-log_path = get_resource_path("configs/crypter.log")
-log = setup_logger(__name__, file_path=log_path)
+log = setup_logger(__name__)
 
 def encrypt(secret_message: str):
     """Returns encrypted secret message"""

@@ -1,0 +1,37 @@
+{
+    "smartsheet_token": "str",
+    "rm_token": "str",
+    "hh2_data_sheetid": "int",
+    "hris_data_sheetid": "int",
+    "proj_workspace_id": "int",
+    "proj_list_sheetid": "int",
+    "rm_to_ss_status_ids": {
+        "550725": "Planned",
+        "550729": "Active",
+        "550726": "Potential",
+        "550730": "Completed",
+        "684245": "Check-in",
+        "684246": "Not Completed",
+        "698235": "Blocked"
+    },
+    "rm_leave_type_ids":{
+        "Vacation":"int", 
+        "Sick":"int", 
+        "Parental Leave":"int"
+    },
+    
+    "DCT_RM_INTAKE_SHEET_ID": "int",
+    "DCT_PL_MIRROR_SHEET_ID": "int",
+    "PL_3_SHEET_ID": "int",
+    "DCT_PLANNING_WORKSPACE_ID": "int",
+    
+    "rm_token_key": "str",
+    "rm_token_token": "str",
+    
+    "ss_auto_token_key": "str",
+    "ss_auto_token_token": "str",
+    
+    "ss_username": "str",
+    "ss_auto_password_key": "str",
+    "ss_auto_password_token": "str"
+}

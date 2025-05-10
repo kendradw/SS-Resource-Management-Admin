@@ -4,7 +4,6 @@ import tkinter as tk
 from tkinter import messagebox, scrolledtext
 import threading
 import json
-import logging
 import traceback
 import os
 import smartsheet
@@ -13,6 +12,7 @@ from smartsheet.models import Workspace
 from smartsheet.workspaces import Workspaces
 from smartsheet.models import Sheet
 from smartsheet.sheets import Sheets
+from configs.setup_logger import setup_logger, get_log_file_path
 import time
 import sys
 
@@ -21,14 +21,8 @@ def get_resource_path(relative_path):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
 
-def get_log_file_path():
-    base_dir = os.getenv("APPDATA") or os.path.abspath(".")
-    log_dir = os.path.join(base_dir, "DCT_RM_Tools")
-    os.makedirs(log_dir, exist_ok=True)
-    return os.path.join(log_dir, "log.log")
-
+log = setup_logger(__name__)
 LOG_FILE_PATH = get_log_file_path()
-
 
 # --------------------- File Tailer (Live Log File Output) ---------------------
 def tail_log_file(file_path, interval=0.5):
@@ -67,12 +61,12 @@ def confirm_and_run(action_name, action_fn):
 
         def run():
             try:
-                logging.info(f"Running: {action_name}...\n")
+                log.info(f"Running: {action_name}...\n")
                 action_fn()
-                logging.info(f"\n{action_name} complete.")
+                log.info(f"\n{action_name} complete.")
             except Exception:
                 error_trace = traceback.format_exc()
-                logging.error(f"\n⚠ Unhandled error:\n{error_trace}")
+                log.error(f"\n⚠ Unhandled error:\n{error_trace}")
             finally:
                 for b in [btn1, btn2, btn3]:
                     b.config(state="normal")
@@ -82,29 +76,31 @@ def confirm_and_run(action_name, action_fn):
 # --------------------- Run Project Updates  ---------------------
 def run_project_updates():
     rmm = AutoRM()
-    logging.info("Updating Projects...")
-    rmm.update_projects()
+    log.info("Syncing Projects...")
+    rmm.sync_projects()
+    log.info("Completed sync updates.")
     messagebox.showinfo("Complete", "Project updates complete.")
 
 # --------------------- Run Time Updates  ------------------------
 def run_time_updates():
     with open(get_resource_path("configs/config.json"), "r") as f:
         config = json.load(f)
-    logging.info("Running hours and assignment updates...")
+    log.info("Running hours updates...")
     sra = SmartsheetRmAdmin(config)
     sra.grab_rm_data()
     sra.run_hours_update()
-    messagebox.showinfo("Complete", "Time and metadata updates complete.")
+    log.info("Completed hours updates.")
+    messagebox.showinfo("Complete", "Time updates complete.")
 
 # --------------------- Run Time Updates  ------------------------
 def run_assignment_updates():
     with open(get_resource_path("configs/config.json"), "r") as f:
         config = json.load(f)
-    logging.info("Running hours and assignment updates...")
+    log.info("Running assignment updates...")
     sra = SmartsheetRmAdmin(config)
     sra.grab_rm_data()
     sra.run_assignment_updates()
-    messagebox.showinfo("Complete", "Time and metadata updates complete.")
+    messagebox.showinfo("Complete", "Assignments updates complete.")
 
 # --------------------- Run All Updates  ------------------------
 def run_all_updates():
