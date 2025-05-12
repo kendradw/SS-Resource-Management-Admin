@@ -1,49 +1,3 @@
-"""# All Projects on RM: Automating Projects
-Script: new project-> new RM GRID
-
-     make new Auxiliary Process sheet (RM Intake) every project gets a sheet
-     - ALL Projects
-     - building or might build = every project
-     - completed = add asterisk to end of title
-     
-    
-    RM Grid: auto select rm share thingy (python) - This needs to get turned on in ss (RM turn on tracking thing) - might not be ab option honestly
-
-    Confirm: Works moving forwards and covers backwards
-
-        Every project on the project list has an RM sheet
-        
-    From the Slack Space
-    * Automation new project→ new RM GRID - 
-    * New template SAME but f(x) for DCT Status - from DCT mirror PL - this is done?
-    * Editing DCT Status (PYTHON) 
-        - whut
-        - 
-    * Add column to PL in appropropriate place (regional sheets)
-    * Two Custom Fields: Estimates (PROJECT VALUES) // Estimated Presented (New column in PL)     = vlookup column 4 from PL3.0V3
-    """
-"""
- √ DCT: 
-1. √ get projects from dct intake
-2. √ check if dct grid exists
-3. √ make dct grid if it doesn't exist
-    a. √ add enumerator to dct grid
-    b. √ add dct grid url to dct intake sheet
-    c. √ add dct grid id to dct intake sheet
- RM:
-4. make RM project if it doesn't exist 
-    √: automation@dowbuilt.com needs to be an rm resouce admin to workload track
-    a. √ add custom fields to RM project - edit the existing script to update the estimate and projected estimate.
-5. √ (test) Confirm the rm project was made - grab project ID
-
-5. √ Update Intake sheet
-    a. √ check off dct grid and RM project checkboxes
-    b. √ add dct grid url to intake sheet
-    c. √ add RM project url to intake sheet
-
-
-"""
-
 from dataclasses import dataclass 
 import os
 import smartsheet
@@ -126,78 +80,29 @@ class AutoRM():
         self.smart = smartsheet.Smartsheet(access_token=self.ss_token)
         self.smart_base_url = "https://api.smartsheet.com/2.0"
         self.rm_base_url = "https://api.rm.smartsheet.com"
+        self.rm_header = {"auth": self.rm_token, "Content-Type": "application/json", "per_page": "1000",}
 
         #const variables, loaded from config
         self.DCT_PL_MIRROR_SHEET_ID = self.config.get("DCT_PL_MIRROR_SHEET_ID")
         self.DCT_PLANNING_WORKSPACE_ID = self.config.get("DCT_PLANNING_WORKSPACE_ID")
 
-        # #class variables
-        # self.log.debug(f"Initiazling class variables")
-        # self.rm_projects_map = self._fetch_rm_map() # map {} of RM projects as name: id
-        # self.template_sheet_id = self._fetch_template() #template grid in SS with the correct formulas. Will find sheet starting with "<PROJECT NAME> TEMPLATE"
-        # self.existing_dct_sheets = self._get_existing_dct_sheets() #dictionary of existing DCT sheets for reference
-        # self.dct_pl_df = self.fetch_dct() # dataframe of the entire DCT PL Mirror
-        # self.active_projects = self.get_active_projects() #list of Project objects of active DCT projects based on DCT Status
-        # self.closed_projects = self.get_closed_projects() #list of Project objects of Closed or Completed DCT Status
-        # self.dct_pl_cols = self._get_column_map(self.DCT_PL_MIRROR_SHEET_ID) # get column mapping for posting updates
-        # self.save_local_data()
-        self.load_local_data()
-
-    def save_local_data(self, folder="local_data"):
-        import os
-        os.makedirs(folder, exist_ok=True)
-
-        # Save JSON-serializable data
-        with open(f"{folder}/project_state.json", "w") as f:
-            json.dump({
-                "rm_projects_map": self.rm_projects_map,
-                "template_sheet_id": self.template_sheet_id,
-                "existing_dct_sheets": self.existing_dct_sheets,
-                "dct_pl_cols": self.dct_pl_cols,
-            }, f, indent=4)
-
-        # Save DataFrame
-        self.dct_pl_df.to_pickle(f"{folder}/dct_pl_df.pkl")
-
-        # Save Project object lists (via pickle)
-        with open(f"{folder}/active_projects.pkl", "wb") as f:
-            pickle.dump(self.active_projects, f)
-        with open(f"{folder}/closed_projects.pkl", "wb") as f:
-            pickle.dump(self.closed_projects, f)
-
-        self.log.info("✅ Local data saved.")
-
-    def load_local_data(self, folder="local_data"):
-        import os
-        try:
-            with open(f"{folder}/project_state.json", "r") as f:
-                state = json.load(f)
-                self.rm_projects_map = state["rm_projects_map"]
-                self.template_sheet_id = state["template_sheet_id"]
-                self.existing_dct_sheets = state["existing_dct_sheets"]
-                self.dct_pl_cols = state["dct_pl_cols"]
-
-            self.dct_pl_df = pd.read_pickle(f"{folder}/dct_pl_df.pkl")
-
-            with open(f"{folder}/active_projects.pkl", "rb") as f:
-                self.active_projects = pickle.load(f)
-            with open(f"{folder}/closed_projects.pkl", "rb") as f:
-                self.closed_projects = pickle.load(f)
-
-            self.log.info("✅ Local data loaded.")
-        except Exception as e:
-            self.log.error(f"❌ Failed to load local data: {e}")
-            raise
-
-
+        #class variables
+        self.log.debug(f"Initiazling class variables")
+        self.rm_projects_map = self._fetch_rm_map() # map {} of RM projects as name: id
+        self.template_sheet_id = self._fetch_template() #template grid in SS with the correct formulas. Will find sheet starting with "<PROJECT NAME> TEMPLATE"
+        self.existing_dct_sheets = self._get_existing_dct_sheets() #dictionary of existing DCT sheets for reference
+        self.dct_pl_df = self.fetch_dct() # dataframe of the entire DCT PL Mirror
+        self.active_projects = self.get_active_projects() #list of Project objects of active DCT projects based on DCT Status
+        self.closed_projects = self.get_closed_projects() #list of Project objects of Closed or Completed DCT Status
+        self.dct_pl_cols = self._get_column_map(self.DCT_PL_MIRROR_SHEET_ID) # get column mapping for posting updates
 
     #region Main Functions -----------------------------------------------------------
     def sync_projects(self):
         """Handles list of todo items by sending them to DCT Grid maker then RM Project maker, 
         then posts updates to smartsheet. Archives orojects marked completed or closed."""
         #get/update all active DCT Projects
-        self.log.info("Syncing active projects..")
-        self.update_active_projects() # this will create the initial list
+        # self.log.info("Syncing active projects..")
+        # self.update_active_projects() # this will create the initial list
         
         #get/update closed/completed projects (Archive in RM + * in DCT sheet name)
         self.log.info("Syncing Closed/Completed projects..")
@@ -207,12 +112,12 @@ class AutoRM():
     def update_active_projects(self):
         """Creates DCT Sheet if needed. Creates RM project. Syncs Custom & Standard Fields"""
         #create all dct sheets first, then create RM sheets, then update all
-        active_projects = self.active_projects[0:2] #remove this is for testing
+        active_projects = self.active_projects
         for project in active_projects:
             #check if needs dct sheet
             if project.dct_grid_bool == False or project.rm_project_bool == False:
                 project = self._existing_grid_handling(project) #check if there's an existing sheet
-                if project.dct_grid_bool == False: #check again if it needs one
+                if project.dct_grid_bool == False: # now check again if it needs one
                     self.log.info(f"Creating new DCT sheets for {project.name}")
                     project = self.create_dct_grid(project) # then create
         
@@ -230,13 +135,12 @@ class AutoRM():
             if project.rm_project_id is None and project.archived is False:
                 project = self._existing_grid_handling(project) #check if there's an existing sheet
             #Has RM ID and not yet archived
-            if project.rm_project_id and not project.archived: #needs to be archived
-                if self._archive_rm(project) and self._archive_grid_name(project):
-                    self.log.info(f"ARCHIVED: {project.name} {project.enum}")
-            self.update_dct_ss(closed_projects) # all RM Projects have been created/updated - update smartsheet
-
+            if project.rm_project_bool and not project.archived: #needs to be archived
+                project = self._archive_rm(project)
+                project = self._archive_grid_name(project)
+        
         #logging archive to DCT PL sheet
-        self.log.info(F"Updating DCT PL with Archive")
+        self.log.info(F"Updating DCT PL with Archive Status")
         self.update_dct_ss(self.closed_projects) # mark off the archived projects to the ss
     #endregion
 
@@ -292,7 +196,30 @@ class AutoRM():
                 self.log.info(f"Updated {len(updated_rows)} rows in DCT RM Intake sheet: Projects: {updated_projects}")
             else:
                 self.log.error(f"Failed to update rows in DCT RM Intake sheet: {response.message}: {project_list}")
-
+    
+    def _archive_grid_name(self, project:Project):
+        """Adds * to archive project name"""
+        grid_name = self.existing_dct_sheets.get(project.enum, {}).get("name",)
+        if grid_name is None:
+            project.error += "No DCT sheet found"
+            return project
+        #necessity checking
+        if grid_name[-1] == "*":
+            return project
+        
+        new_name=project.name+"*"
+        try:
+            updated_sheet = self.smart.Sheets.update_sheet(
+            # sheet id
+            int(self.existing_dct_sheets.get(project.enum).get("id")), 
+            # new name
+            smartsheet.models.Sheet({
+                'name': new_name}))
+        except Exception as e:
+            self.log.error(f"Error updating archived sheet name: {project.name} - {e}")
+            project.error += f"Error updating sheet name: {e}"
+        return project
+    
     def get_active_projects(self):
         """Fetches active projects and returns list of Project objects. 
         Active Projects are wheere DCT Status != "Closed" "Complete" or "Inactive". All other statuses are considered active.
@@ -317,7 +244,7 @@ class AutoRM():
             project = Project(
                 row_id=row["id"],
                 name=row["NAME"],
-                enum=row["ENUMERATOR"],
+                enum=row["ENUMERATOR"], #has no leading 0
                 architect=row["ARCHITECT"],
                 estimate=row["ESTIMATE"],
                 dct_status=row["DCT Status"],
@@ -363,13 +290,13 @@ class AutoRM():
         self.log.info("Fetching existing DCT Planning sheets....")
         workspace = self.smart.Workspaces.get_workspace(self.DCT_PLANNING_WORKSPACE_ID)
         dct_sheets = {}
-        dct_sheets["None"] = [] #list to hold sheets with name, but no enum
+        dct_sheets["None"] = [] #list to hold sheets with name, but no 
         dct_sheets["Duplicates"] = {} #list to hold duplicate found enum values
         for sheet in workspace.sheets:
             #skip utility sheets
             if str(sheet.name).startswith("_"):
                 continue
-            enum = self._get_summary_field_value(sheet) #get the enum
+            enum = self._get_summary_field_value(sheet)#get the enum
             if enum == None: # if there's not one (Manual input)
                 dct_sheets["None"].append(sheet.name) # put the unclaimed names into a list
             elif enum in dct_sheets:  
@@ -381,9 +308,6 @@ class AutoRM():
                 dct_sheets[enum] = {"name":sheet.name, "url":sheet.permalink, "id": sheet.id}
         self.log.info(f"{len(dct_sheets)} existing dct sheets fetched")
         self.existing_dct_sheets = dct_sheets
-        #Print to file TODO remove
-        with open("data/dct.json", "w") as of:
-            json.dump(dct_sheets, of, indent=2)
         return dct_sheets
     
     def _get_summary_field_value(self, sheet, sf_title = "Enumerator"):
@@ -414,12 +338,19 @@ class AutoRM():
         """Checks for existing DCT grid and RM project. Will link existing grid to project or will produce error message that posts to smartsheet."""
         if project.dct_grid_bool is False:
             if project.enum in self.existing_dct_sheets:
-                self.log.info(f"Logging existing dct sheet for project {project.name}")
+                project.dct_grid_bool = True
+                project.dct_grid_url =self.existing_dct_sheets.get(project.enum).get("url")
+                self.log.info(f"Logging existing dct sheet for project {project.enum} '{project.name}'")
         if project.rm_project_bool is False:
             if project.name in self.rm_projects_map:
                 project.rm_project_bool = True
                 project.rm_project_id = self.rm_projects_map[project.name]
                 self.log.info(f"Logging existing RM project for {project.name}")
+            elif project.name in self.rm_archived_map:
+                project.archived = True
+                project.rm_project_id = self.rm_archived_map[project.name]
+                project.rm_project_bool = True
+
         return project
         #endregion
         
@@ -602,22 +533,18 @@ class AutoRM():
         Example: {"cool Project" : {enum: 02600, id: 1234567890}}
         """
         self.log.info(f"Retrieving RM Projects...")
-        endpoint = "/api/v1/projects"
-        self.rm_header = {
-            "auth": self.rm_token,
-            "Content-Type": "application/json",
-            "per_page": "1000",
-        }
+        endpoint = "/api/v1/projects?with_archived=true"
         rm_projects_map = {}
+        self.rm_archived_map = {}
         data = self.paginated_rm_getrequest(endpoint, self.rm_header)
-        #TODO: Delete print for debugging
-        with open("data/rm_projects.json", "w") as of:
-            json.dump(data, of, indent=2)
         for project in data: # loop through projects
             name = str(project["name"])
-            rm_projects_map[name] = project["id"] #assign project ID to name for map reference
-        with open("data/rm_dict.json", "w") as of:
-            json.dump(rm_projects_map, of, indent=2)
+            if project["archived"] == True:
+                if name.endswith("_ARCHIVE"):
+                    name = name[:-8]  # Remove last 8 characters
+                self.rm_archived_map[name] = project["id"]
+            else:
+                rm_projects_map[name] = project["id"] #assign project ID to name for map reference
         self.log.info(f"Total RM Projects: {len(rm_projects_map)}")
         return rm_projects_map
     
@@ -716,6 +643,7 @@ class AutoRM():
    
     def _archive_rm(self, project:Project):
         """Marks Arhvive attribute on RM project"""
+        #check if already archived
         data={
             'id':project.rm_project_id,
             'project_code':" ", #remove project code to not interfere with time & expense posting
@@ -729,10 +657,10 @@ class AutoRM():
         if response.status_code and response2.status_code == 200:
             self.log.info(f"{project.name} correctly archived in RM")
             project.archived = True
-            return True
         else:
             self.log.error(f"Error with archive update: {response.json()}")
-            return False
+            project.error += f"Error with archive update: {response.json()}"
+        return project
 
 #endregion
         
@@ -780,58 +708,6 @@ class AutoRM():
     #endregion
         
     #endregion
-
-# def main():
-#     rmm = AutoRM()
-#     rmm._get_existing_dct_sheets()
-    
-#     # #rmm.fetch_new_dct_projects()
-#     # p= Project(name='_TEST IT 2.7*', enum='01151', dct_status='status', estimate='estimate', estimate_presented='ep', dct_sheet_id=4834941121548164, rm_project_bool=True, dct_grid_bool='', dct_grid_url='https://app.smartsheet.com/sheets/jphh9fwHW267hcvRq5m25PgwVpGVc34FXcvHFFv1', dct_enum_field_id=6231669148176260)
-#     # # p = Project(name= "_Test Formula2", enum="01151", dct_status='status', estimate='estimate', estimate_presented='ep', dct_sheet_id=2687330368311172)
-#     # # #rmm.create_DCT_grid(p)
-#     # # # # print(p)
-#     # # # p = rmm._add_dct_grid_enum(p)
-#     # # print(p)
-#     # #rmm._fetch_template()
-#     # rmm._add_dct_grid_enum(project=p)
-
-    
-#     # #compare existing pl to dct planning
-#     # rmm.retroactive_DCT_grid()
-#     #endregion ------------------------------------------
-
-#     # # Selenium
-#     # rmm.initialize_selenium()
-
-#     # # RM handling
-#     #rmm.fetch_rm_projects()
-#     # print(rmm.get_rm_custom_fields(9038651))
-
-#     # p = Project(name='_TEST Auto_RM', enum='01244', dct_status='Closed', estimate='$7,050,000', estimate_presented=None, row_id=8478043445661572, rm_project_bool=False, dct_grid_bool=True, rm_project_id=None, dct_sheet_id=7554767950663556, dct_grid_url='https://app.smartsheet.com/sheets/w7gPJ6vpWxRhXh4JGC75m7f4V6PrPCwwr3fJrpv1', dct_enum_field_id=None, dct_enum_field_set=True)
-#     # rmm.todo_list = [p]
-#     # # rmm.create_rm_projects()
-
-#     # #update intake sheet
-#     # rmm.update_intake_rows()
-
-#     #standard fields
-#     # fields = rmm._get_rm_fields(10441467, standard=True)
-#     # print(fields)
-
-#     #checking update/post to SS
-#     # rmm.fetch_intake() #get the intak elist
-#     # rmm.update_rm_project_data()
-#     # rmm.update_intake_rows() 
-
-#     #Main flow ------------------------------------------
-#     # rmm.fetch_new_dct_projects() # fetch new projects from DCT RM Intake sheet
-#     # rmm.todo_handler() # handle todo list
-
-
-
-
-
-
 
 
 ## RM Project Custom Fields
