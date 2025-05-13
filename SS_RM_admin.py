@@ -140,7 +140,7 @@ class SmartsheetRmAdmin():
     def grab_rm_userids(self):
         '''grabs each user's id, this will help with allocating hours to users correctly'''
         response_dict = self.paginated_rm_getrequest(endpoint='/api/v1/users')
-        self.log.infor("Grabbing RM user id's...")
+        self.log.info("Grabbing RM user id's...")
 
         self.rm_user_list=[]
         self.sageid_to_email={}
@@ -255,6 +255,7 @@ class SmartsheetRmAdmin():
     def fetch_and_prepare_hh2_data(self):
         '''grabs the hh2 data from ss, then cleans the df and creates a list of dict records
         I have to replace Jobs with resulting Jobs because Katherine added jobs that are the results of certain data conditions, not from hh2 8.5.24'''
+        self.log.info("Fetching hh2 data...")
         sheet = grid(self.hh2_data_sheetid)
         sheet.fetch_content()
         df = sheet.df
@@ -353,6 +354,7 @@ class SmartsheetRmAdmin():
         '''grabs existing data from rm, translates rm job id to job number, rm user id to user email, 
         and then builds out a reference dictionary of time entries (hrs) for verifying if update is needed, adding hours for same job/time as needed
         and building reference of entry ids w list of ids per entry'''
+        self.log.info("Fetching RM time data...")
         self.current_rm_timedata = []
         self.rm_quickreference_hrs = {}
         self.rm_quickreference_id = {}

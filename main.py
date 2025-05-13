@@ -22,8 +22,26 @@ def get_resource_path(relative_path):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
 
+def get_writable_path(relative_path):
+    # Use %APPDATA% or local working dir
+    base = os.getenv("APPDATA") or os.path.abspath(".")
+    return os.path.join(base, relative_path)
+#logger
+log_path = get_writable_path("DCT_RM_Tools/log.log")
+os.makedirs(os.path.dirname(log_path), exist_ok=True)
 log = setup_logger(__name__)
+
 LOG_FILE_PATH = get_log_file_path()
+
+# Global uncaught exception handler
+def handle_exception(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        # Allow Ctrl+C to work normally
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    log.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+sys.excepthook = handle_exception
 
 # --------------------- File Tailer (Live Log File Output) ---------------------
 def tail_log_file(file_path, interval=0.5):
@@ -67,7 +85,7 @@ def confirm_and_run(action_name, action_fn):
                 log.info(f"\n{action_name} complete.")
             except Exception:
                 error_trace = traceback.format_exc()
-                log.error(f"\n⚠ Unhandled error:\n{error_trace}")
+                log.error(f"\nUnhandled error:\n{error_trace}")
             finally:
                 for b in [btn1, btn2, btn3]:
                     b.config(state="normal")
