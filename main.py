@@ -123,9 +123,11 @@ def run_assignment_updates():
 
 # --------------------- Run All Updates  ------------------------
 def run_all_updates():
+    with open(get_resource_path("configs/config.json"), "r") as f:
+        config = json.load(f)
     run_project_updates()
-    run_time_updates()
-    run_assignment_updates()
+    sra = SmartsheetRmAdmin(config)
+    sra.run_all()
 
 # ---------------------- Quit  ----------------------------------
 def quit_app():
