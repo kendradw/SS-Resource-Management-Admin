@@ -15,6 +15,7 @@ from smartsheet.sheets import Sheets
 from configs.setup_logger import setup_logger, get_log_file_path
 import time
 import sys
+import signal
 
 def get_resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
@@ -110,8 +111,12 @@ def run_all_updates():
 
 # ---------------------- Quit  ----------------------------------
 def quit_app():
-    root.destroy()
-    sys.exit()
+    try:
+        root.destroy()
+    except:
+        pass  # in case root is already destroyed
+    # Ensure full process termination
+    os.kill(os.getpid(), signal.SIGTERM)
 
 def style_button(btn, bg_color, fg_color, hover_color):
     btn.configure(bg=bg_color, fg=fg_color, activebackground=hover_color, relief="flat", cursor="hand2", bd=0)

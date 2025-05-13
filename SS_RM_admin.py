@@ -140,6 +140,7 @@ class SmartsheetRmAdmin():
     def grab_rm_userids(self):
         '''grabs each user's id, this will help with allocating hours to users correctly'''
         response_dict = self.paginated_rm_getrequest(endpoint='/api/v1/users')
+        self.log.infor("Grabbing RM user id's...")
 
         self.rm_user_list=[]
         self.sageid_to_email={}

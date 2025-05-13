@@ -146,7 +146,7 @@ class SmartsheetBot:
                 )
                 resource_tab.click()
                 self.log.info("Opened RM tab.")
-                time.sleep(2)  # give it time to load
+                time.sleep(5)  # give it time to load
 
             # lick "Track workload" button
             try:

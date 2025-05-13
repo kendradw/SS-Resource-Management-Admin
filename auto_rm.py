@@ -98,11 +98,11 @@ class AutoRM():
 
     #region Main Functions -----------------------------------------------------------
     def sync_projects(self):
-        """Handles list of todo items by sending them to DCT Grid maker then RM Project maker, 
-        then posts updates to smartsheet. Archives orojects marked completed or closed."""
+        """Main method to sync all projects by sending them to DCT Grid maker then RM Project maker, 
+        then posts updates to smartsheet. Updates summary fields in RM and Archives orojects marked completed or closed."""
         #get/update all active DCT Projects
-        # self.log.info("Syncing active projects..")
-        # self.update_active_projects() # this will create the initial list
+        self.log.info("Syncing active projects..")
+        self.update_active_projects() # this will create the initial list
         
         #get/update closed/completed projects (Archive in RM + * in DCT sheet name)
         self.log.info("Syncing Closed/Completed projects..")
@@ -116,9 +116,8 @@ class AutoRM():
         for project in active_projects:
             #check if needs dct sheet
             if project.dct_grid_bool == False or project.rm_project_bool == False:
-                project = self._existing_grid_handling(project) #check if there's an existing sheet
+                project = self._check_existing(project) #check if there's an existing sheet
                 if project.dct_grid_bool == False: # now check again if it needs one
-                    self.log.info(f"Creating new DCT sheets for {project.name}")
                     project = self.create_dct_grid(project) # then create
         
         self.update_dct_ss(active_projects) # all dct sheets have been created - update smartsheet
@@ -133,7 +132,7 @@ class AutoRM():
         closed_projects = self.closed_projects
         for project in closed_projects:
             if project.rm_project_id is None and project.archived is False:
-                project = self._existing_grid_handling(project) #check if there's an existing sheet
+                project = self._check_existing(project) #check if there's an existing sheet
             #Has RM ID and not yet archived
             if project.rm_project_bool and not project.archived: #needs to be archived
                 project = self._archive_rm(project)
@@ -334,7 +333,7 @@ class AutoRM():
         except Exception as e:
             self.log.error(f"EXCEPTION: {e}")
         
-    def _existing_grid_handling(self, project:Project):
+    def _check_existing(self, project:Project):
         """Checks for existing DCT grid and RM project. Will link existing grid to project or will produce error message that posts to smartsheet."""
         if project.dct_grid_bool is False:
             if project.enum in self.existing_dct_sheets:
@@ -342,15 +341,25 @@ class AutoRM():
                 project.dct_grid_url =self.existing_dct_sheets.get(project.enum).get("url")
                 self.log.info(f"Logging existing dct sheet for project {project.enum} '{project.name}'")
         if project.rm_project_bool is False:
+            sheet_name = self.existing_dct_sheets.get(project.enum, {}).get("name", None)
+            if sheet_name is None:
+                return project
+            if sheet_name.endswith("*"): 
+                sheet_name = sheet_name.rstrip("*")
             if project.name in self.rm_projects_map:
                 project.rm_project_bool = True
                 project.rm_project_id = self.rm_projects_map[project.name]
-                self.log.info(f"Logging existing RM project for {project.name}")
+            elif sheet_name in self.rm_projects_map:
+                project.rm_project_bool = True
+                project.rm_project_id = self.rm_projects_map[sheet_name]
             elif project.name in self.rm_archived_map:
                 project.archived = True
                 project.rm_project_id = self.rm_archived_map[project.name]
                 project.rm_project_bool = True
-
+            elif sheet_name in self.rm_projects_map:
+                project.rm_project_bool = True
+                project.rm_project_id = self.rm_projects_map[sheet_name]
+            self.log.info(f"Logging existing RM project for {project.name}")
         return project
         #endregion
         
@@ -456,10 +465,11 @@ class AutoRM():
         #endregion 
     #endregion
 
+
     #region RM -----------------------------------------------------------------------
         #region Create RM Project
     def create_rm_projects(self, projects:list[Project]):
-        """Creates new RM projects for each project in the todo list that does not already have a RM project.
+        """Creates new RM projects for each project in the list that does not already have a RM project.
         Uses the RM API to create the project. Does not add custom fields yet.
         Updates the project object with the RM project ID and name, and sets the rm_project_bool to True.
         This function is called after the DCT grid has been created for the project.
@@ -470,8 +480,8 @@ class AutoRM():
         if any(project.rm_project_bool is not True for project in projects):
             #Initialize SS bot
             self.log.info("auto_rm Initializing Smartsheet Bot for RM...") 
-            #TODO: Headless = true
-            smartbot = SmartsheetBot(self.ss_username, self.ss_password, headless=False)
+            #TODO: Headless = False for watchign
+            smartbot = SmartsheetBot(self.ss_username, self.ss_password, headless=True)
 
             smartbot.auto_login() #no user input log-in method
             self.log.info(f"Logged in to {self.ss_username} Smartsheet account for RM bot...")
@@ -491,18 +501,7 @@ class AutoRM():
         # verify that RM projects were created & update summary fields
         projects = self.verify_sync_rm_project(projects) #verify if a project was created and mark project.rm_project_bool true, updates custom fields
         return projects #send em back!
-    
-    def check_existing_rm(self, project:Project):
-        """Double checks if there is an existing RM project for this project.
-        Returns:
-            existing:bool if the project exists
-            project: Project the project object with updates if true"""
-        if project.name in self.rm_projects_map:
-            project.rm_project_bool = True
-            project.rm_project_id =self.rm_projects_map[project.name]
-            return project
-        return False, project
-    
+        
     def verify_sync_rm_project(self, projects:list[Project]):
         """Verifies that the RM projects were created by comparing the RM projects to the todo list.
         Compares by name.
@@ -510,18 +509,17 @@ class AutoRM():
         """
         #verify that RM projects were created
         self.log.info("Syncing RM project data...")
-        rm_projects = self._fetch_rm_map()
+        self._fetch_rm_map()
         for project in projects: 
-            if project.name in rm_projects: #if the project exists in RM its either seasoned, or newly arrived
-                if project.rm_project_id == None: #if its fresh, add the RM ID and set the bool
-                    project.rm_project_id = rm_projects[project.name]
-                    project.rm_project_bool = True
+            if project.rm_project_bool == False:
+                project = self._check_existing(project)
                 #Check if summary fields need updates
-                self.log.info(f"Found RM Project '{project.name}' for enum {project.enum}. Updating summary fields...")
+            if project.rm_project_bool == True:
+                self.log.info(f"Checking summary fields for {project.enum} '{project.name}'")
                 project = self.rm_field_updates(project)
             else: #if its not in the RM list, a project didn't get created :(
                 self.log.error(f"ERROR: '{project.name}' Not found in RM list...")
-                project.error(f"(verify_sync_rm_project) RM Creation error")
+                project.error += f"ERROR: Verify Sync - RM Creation error"
                 project.rm_project_bool = False
         return projects #Send em back
         #endregion
@@ -534,7 +532,7 @@ class AutoRM():
         """
         self.log.info(f"Retrieving RM Projects...")
         endpoint = "/api/v1/projects?with_archived=true"
-        rm_projects_map = {}
+        self.rm_projects_map = {}
         self.rm_archived_map = {}
         data = self.paginated_rm_getrequest(endpoint, self.rm_header)
         for project in data: # loop through projects
@@ -544,9 +542,9 @@ class AutoRM():
                     name = name[:-8]  # Remove last 8 characters
                 self.rm_archived_map[name] = project["id"]
             else:
-                rm_projects_map[name] = project["id"] #assign project ID to name for map reference
-        self.log.info(f"Total RM Projects: {len(rm_projects_map)}")
-        return rm_projects_map
+                self.rm_projects_map[name] = project["id"] #assign project ID to name for map reference
+        self.log.info(f"Total RM Projects: {len(self.rm_projects_map)+len(self.rm_archived_map)}")
+        
     
     def paginated_rm_getrequest(self, endpoint, header, params=None,):
         """
@@ -596,6 +594,7 @@ class AutoRM():
                 return data
         else:
             self.log.error(f"ERROR: Failed to get RM project {rm_id} fields from {url}: ERROR MESSAGE: {response.text}")
+            return f"ERROR: Failed to get RM project {rm_id} fields from {url}: ERROR MESSAGE: {response.text}"
 
         #endregion
         #region Post Updates -----------------------------------------------------
@@ -609,6 +608,9 @@ class AutoRM():
             self.log.info(f"{project.name} does not have an RM sheet...")
             return
         cu_fields = self._get_rm_fields(project.rm_project_id)
+        if isinstance(cu_fields, str):
+            project.error += cu_fields
+            return project
         # Get all the fieds that need to be updated
         update_custom = {}  #dict of field_id:value for custom fields needing update
         for field in cu_fields:
@@ -636,30 +638,27 @@ class AutoRM():
 
         #now, we check the standard fields. there's only really two to worry about I guess
         st_fields = self._get_rm_fields(project.rm_project_id, standard=True)
-        if st_fields.get("ciient") != project.client or st_fields.get("project_code") != project.project_code:
-            self.log.info(f"Updating standard fields for project {project}")
+        if isinstance(st_fields, str):
+            project.error += st_fields
+            return project
+        if st_fields.get("client") != project.client or st_fields.get("project_code") != project.project_code:
+            self.log.info(f"Updating standard fields for project {project.enum} {project.name}")
             project = self._post_standard_field(project)
         return project #send it back
    
     def _archive_rm(self, project:Project):
         """Marks Arhvive attribute on RM project"""
-        #check if already archived
-        data={
-            'id':project.rm_project_id,
-            'project_code':" ", #remove project code to not interfere with time & expense posting
-            }
         data2={
             'id':project.rm_project_id,
             'archived':'true'
             }
-        response = requests.put(f"https://api.rm.smartsheet.com/api/v1/projects/{project.rm_project_id}", headers=self.rm_header, data=json.dumps(data))
         response2 = requests.put(f"https://api.rm.smartsheet.com/api/v1/projects/{project.rm_project_id}", headers=self.rm_header, data=json.dumps(data2))
-        if response.status_code and response2.status_code == 200:
+        if  response2.status_code == 200:
             self.log.info(f"{project.name} correctly archived in RM")
             project.archived = True
         else:
-            self.log.error(f"Error with archive update: {response.json()}")
-            project.error += f"Error with archive update: {response.json()}"
+            self.log.error(f"Error with archive update: {response2.json()}")
+            project.error += f"Error with archive update: {response2.json()}"
         return project
 
 #endregion
