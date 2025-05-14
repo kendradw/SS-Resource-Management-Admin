@@ -526,6 +526,10 @@ class SmartsheetRmAdmin():
     def grab_connected_sheet_data(self, sheet_i, sheet_info):
         '''Grabs the relevent data from the DCT Planning sheet associated with the RM Data for comparison and update.'''
         if sheet_info['status'] == "connected":
+            if grid.token == None:
+                grid.token = self.smartsheet_token
+            if grid.token == None:
+                self.log.error("ERROR: setting Smartsheet Token")
             sheet_sum = grid(sheet_info['ss_sheet_id'])
             sheet_sum.fetch_summary_content()
             self.parent_data= sheet_sum.df.to_dict('records')
