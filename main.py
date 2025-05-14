@@ -123,11 +123,24 @@ def run_assignment_updates():
 
 # --------------------- Run All Updates  ------------------------
 def run_all_updates():
+    #---- Project Sync -----
+    rmm = AutoRM()
+    log.info("Syncing Projects...")
+    rmm.sync_projects()
+    log.info("---- Completed sync updates ----")
+    # ---- Hours Update----
     with open(get_resource_path("configs/config.json"), "r") as f:
         config = json.load(f)
-    run_project_updates()
+    log.info("Running hours updates...")
     sra = SmartsheetRmAdmin(config)
-    sra.run_all()
+    sra.grab_rm_data()
+    sra.run_hours_update()
+    log.info("---- Completed hours updates ----- ")
+    # ---- assignment_updates ----
+    sra.grab_rm_data()
+    sra.run_assignment_updates()
+    log.info("---- Completed assignment updates ----- ")
+    messagebox.showinfo("Complete", "All updates complete.")
 
 # ---------------------- Quit  ----------------------------------
 def quit_app():
