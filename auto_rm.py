@@ -3,7 +3,6 @@ import os
 import smartsheet
 import json
 import requests
-from typing import List
 import pandas as pd
 
 pd.set_option('future.no_silent_downcasting', True) #downcasting .fillna 
@@ -14,12 +13,6 @@ from configs.setup_logger import setup_logger # for logging
 from clients.smartsheet_grid import grid # for getting data from smartsheet grid
 import configs.crypter as crypter
 import sys
-
-#to delete
-import json
-import pickle
-import pandas as pd
-
 
 def get_resource_path(relative_path):
     """Resolves path to bundled or script-relative resource"""
@@ -88,7 +81,7 @@ class AutoRM():
 
         #class variables
         self.log.debug(f"Initiazling class variables")
-        self.rm_projects_map = self._fetch_rm_map() # map {} of RM projects as name: id
+        self._fetch_rm_map() # map {} of RM projects as name: id
         self.template_sheet_id = self._fetch_template() #template grid in SS with the correct formulas. Will find sheet starting with "<PROJECT NAME> TEMPLATE"
         self.existing_dct_sheets = self._get_existing_dct_sheets() #dictionary of existing DCT sheets for reference
         self.dct_pl_df = self.fetch_dct() # dataframe of the entire DCT PL Mirror
@@ -96,6 +89,7 @@ class AutoRM():
         self.closed_projects = self.get_closed_projects() #list of Project objects of Closed or Completed DCT Status
         self.dct_pl_cols = self._get_column_map(self.DCT_PL_MIRROR_SHEET_ID) # get column mapping for posting updates
 
+    
     #region Main Functions -----------------------------------------------------------
     def sync_projects(self):
         """Main method to sync all projects by sending them to DCT Grid maker then RM Project maker, 
@@ -481,7 +475,7 @@ class AutoRM():
             #Initialize SS bot
             self.log.info("auto_rm Initializing Smartsheet Bot for RM...") 
             #TODO: Headless = False for watchign
-            smartbot = SmartsheetBot(self.ss_username, self.ss_password, headless=True)
+            smartbot = SmartsheetBot(self.ss_username, self.ss_password, headless=False)
 
             smartbot.auto_login() #no user input log-in method
             self.log.info(f"Logged in to {self.ss_username} Smartsheet account for RM bot...")
@@ -530,7 +524,7 @@ class AutoRM():
         Returns: dictionary of projects as name: {enum, id}
         Example: {"cool Project" : {enum: 02600, id: 1234567890}}
         """
-        self.log.info(f"Retrieving RM Projects...")
+        self.log.info(f"Fetchign RM Projects...")
         endpoint = "/api/v1/projects?with_archived=true"
         self.rm_projects_map = {}
         self.rm_archived_map = {}
@@ -709,42 +703,4 @@ class AutoRM():
     #endregion
 
 
-## RM Project Custom Fields
-
-# All RM projects have two new custom fields. Automates for new, and covers existing projects.
-
-    # Two Custom Fields: Estimates (PROJECT VALUES) // Estimated Presented (New column in PL)
-
-        # Two custom fields: RM tool gets 2 new custom fields in all projects.
-
-            # Confirm: Works moving forwards and covers backwards
-
-    # RM API: Use API to update fields:
-
-        # Estimates: mapped to new RM custom field from PL (Aggregate) ESTIMATE 
-
-        # Estimate Presented: mapped to new RM custom field from DCT mirror ESTIMATE PRESENTED
-
-
-
-# RM API: Use API to update fields:
-# Estimates: mapped to new RM custom field from PL (Aggregate) ESTIMATE 
-#get enumerator for project from RM field
-# go to PL 3.0 
-# get the data
-# get the data from row ENUM for column Estimate
-# Create new custome field for this rm project
-# call it estimate
-# Fill in the value that was just retrieved from SS
-# Estimate Presented: mapped to new RM custom field from DCT mirror ESTIMATE PRESENTED
-# get enumerator for project from RM field
-# go to DCT Mirror sheet
-# get the data
-# get the data from row ENUM for column ESTIMATE PRESENTED
-# Create new custome field for this rm project
-# call it estimate
-# Fill in the value that was just retrieved from SS
-
-
-# RM API: Update fields with data from PL and DCT Mirror
 
