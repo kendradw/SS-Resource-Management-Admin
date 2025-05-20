@@ -52,8 +52,8 @@ class Project:
 
 class AutoRM():
 
-    def __init__(self):
-        self.log = setup_logger(__name__)
+    def __init__(self, log_path:str = None):
+        self.log = setup_logger(__name__, file_path=log_path)
         self.log.info("Initializing RMManager...")
         
         #load config

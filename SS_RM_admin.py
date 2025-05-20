@@ -6,29 +6,14 @@ from clients.smartsheet_grid import grid
 import requests
 import json
 import time
-import os
-from dotenv import load_dotenv
 import pandas as pd
 from configs.setup_logger import setup_logger
 from auto_rm import Project
-import sys
-
-
-def get_resource_path(relative_path):
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, relative_path)
-    return os.path.join(os.path.abspath("."), relative_path)
-
-def get_writable_path(relative_path):
-    # Use %APPDATA% or local working dir
-    base = os.getenv("APPDATA") or os.path.abspath(".")
-    return os.path.join(base, relative_path)
-
 #endregion
 
 class SmartsheetRmAdmin():
     '''admin for DCT's Resource Management tool that is part of SS'''
-    def __init__(self, config):
+    def __init__(self, config, log_path:str = None):
         self.config = config
         self.apply_config(config) # '''turns all config items into self.key = value'''
         #smartsheet setup
@@ -38,9 +23,7 @@ class SmartsheetRmAdmin():
         self.start_time = time.time()
 
         #logger
-        log_path = get_writable_path("DCT_RM_Tools/log.log")
-        os.makedirs(os.path.dirname(log_path), exist_ok=True)
-        self.log = setup_logger(__name__)
+        self.log = setup_logger(__name__, file_path=log_path)
 
         self.rm_header = {
             'Content-Type': 'application/json',

@@ -30,7 +30,7 @@ class ColoredFormatter(logging.Formatter):
         reset_color = "\033[0m"
         return f"{log_color}{formatted_message}{reset_color}"
 
-def setup_logger(name=None, level=logging.INFO, log_to_file=True):
+def setup_logger(name=None, level=logging.INFO, log_to_file=True, file_path = None):
     """
     Set up a logger with:
     - Colored output for the console.
@@ -46,7 +46,6 @@ def setup_logger(name=None, level=logging.INFO, log_to_file=True):
         logging.Logger: Configured logger.
     """
     
-    file_path=get_log_file_path()
     logger = logging.getLogger(name)
     logger.setLevel(level)
     logger.propagate = False
@@ -66,10 +65,11 @@ def setup_logger(name=None, level=logging.INFO, log_to_file=True):
 
     # File Handler (Plain Text, No Colors)
     if log_to_file:
-        resolved_log_path = get_log_file_path()
-        os.makedirs(os.path.dirname(resolved_log_path), exist_ok=True)
+        if file_path is None:
+            file_path = get_log_file_path()
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
-        file_handler = logging.FileHandler(resolved_log_path)
+        file_handler = logging.FileHandler(file_path)
         file_handler.setLevel(level)
         plain_formatter = logging.Formatter(
             '%(asctime)s [%(levelname)s] %(filename)s - %(name)s - %(funcName)s:%(lineno)d - %(message)s',

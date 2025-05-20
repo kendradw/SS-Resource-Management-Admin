@@ -17,8 +17,8 @@ import os
 
 
 class SmartsheetBot:
-    def __init__(self, email, password, headless=True):
-        self.log = setup_logger(__name__)
+    def __init__(self, email, password, headless=True, log_path:str = None):
+        self.log = setup_logger(__name__, file_path=log_path)
         
         self.email = email
         self.password = password
