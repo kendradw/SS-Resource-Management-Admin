@@ -1,6 +1,12 @@
-# 4-4-25
-
-# Selenium Imports
+""" Usage Sample
+ if __name__ == "__main__":
+     SHEETS = ["https://app.smartsheet.com/sheets/695wjPhPvCxh5m9Jpjf9FF3Fv97c2mF5cc75Rmw1?view=grid"]
+     bot = SmartsheetBot(email=ss_username, password=ss_password, headless=False) #false for visibilty
+     bot.login()
+     for sheet_url in SHEETS:
+         bot.track_workload(sheet_url)
+     bot.close()"""
+#region ---- Imports ----
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
@@ -9,16 +15,16 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 from selenium.common.exceptions import StaleElementReferenceException
 import time
-
+import logging
 from configs.setup_logger import setup_logger
 import configs.crypter as crypter
 import sys
 import os
-
+#endregion
 
 class SmartsheetBot:
-    def __init__(self, email, password, headless=True, log_path:str = None):
-        self.log = setup_logger(__name__, file_path=log_path)
+    def __init__(self, email, password, logger: logging.Logger, headless=True):
+        self.log = logger
         
         self.email = email
         self.password = password
@@ -32,7 +38,7 @@ class SmartsheetBot:
         self.driver = webdriver.Chrome(options=options)
         self.wait = WebDriverWait(self.driver, 100)
 
-    #region Log-in to Smartsheet ---------------------------------------------------------------------
+    #region ---- Log-in to Smartsheet ----
     def auto_login(self):
         """Auto login to smartsheet with automation@dowbuilt.com account"""
 
@@ -118,22 +124,12 @@ class SmartsheetBot:
         self.wait.until(EC.url_contains("/home"))  
         self.log.info("Login detected. Continuing...")
     #endregion
-
-    #region Workload Tracking  ---------------------------------------------------------------------
+    #region ---- Workload Tracking  ----
     def track_workload(self, sheet_url):
         self.driver.get(sheet_url)
         time.sleep(2)
         self.wait_short = WebDriverWait(self.driver, 10)
         try:
-            # #Click Resource Management tab
-            # resource_tab = self.wait.until(
-            #     EC.element_to_be_clickable((By.ID, "rtr-16"))
-            # )
-            # resource_tab.click()
-            # time.sleep(2) ---
-
-            # Click Resource Management tab
-            # Check if workload button is already visible (i.e., RM tab is already open)
             try:
                 workload_btn = self.wait_short.until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, 'button[data-client-id="tk-landing-panel-track-workload-btn"]'))
@@ -170,7 +166,7 @@ class SmartsheetBot:
             self.log.info(f"Failed to track workload for {sheet_url}: {e}")
             return False
     #endregion
-
+    #region ---- Destruct / Close ----
     def close(self):
         """Close the browser session."""
         if self.driver: 
@@ -181,18 +177,7 @@ class SmartsheetBot:
     #destructor
     def __del__(self):
         self.close()
+    #endregion
 
-# # usage
-# if __name__ == "__main__":
-#     SHEETS = [
-#         "https://app.smartsheet.com/sheets/695wjPhPvCxh5m9Jpjf9FF3Fv97c2mF5cc75Rmw1?view=grid"
-#     ]
 
-#     bot = SmartsheetBot(email=ss_username, password=ss_password, headless=False)
-#     bot.login()
-    
-#     for sheet_url in SHEETS:
-#         bot.track_workload(sheet_url)
-
-#     bot.close()
 

@@ -2,18 +2,6 @@ import logging
 import sys
 import os
 
-# def get_resource_path(relative_path):
-#     """Resolves path to bundled or script-relative resource"""
-#     if hasattr(sys, '_MEIPASS'):
-#         return os.path.join(sys._MEIPASS, relative_path)
-#     return os.path.join(os.path.abspath("."), relative_path)
-
-def get_log_file_path():
-    base_dir = os.getenv("APPDATA") or os.path.abspath(".")
-    log_dir = os.path.join(base_dir, "DCT_RM_Tools")
-    os.makedirs(log_dir, exist_ok=True)
-    return os.path.join(log_dir, "log.log")
-
 class ColoredFormatter(logging.Formatter):
     """Formatter for applying ANSI colors to log messages for console output."""
     COLORS = {
@@ -30,7 +18,7 @@ class ColoredFormatter(logging.Formatter):
         reset_color = "\033[0m"
         return f"{log_color}{formatted_message}{reset_color}"
 
-def setup_logger(name=None, level=logging.INFO, log_to_file=True, file_path = None):
+def setup_logger(name=None, level=logging.INFO, log_to_file=True, file_path = "configs/log.log"):
     """
     Set up a logger with:
     - Colored output for the console.
@@ -65,8 +53,6 @@ def setup_logger(name=None, level=logging.INFO, log_to_file=True, file_path = No
 
     # File Handler (Plain Text, No Colors)
     if log_to_file:
-        if file_path is None:
-            file_path = get_log_file_path()
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
         file_handler = logging.FileHandler(file_path)

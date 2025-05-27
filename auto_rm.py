@@ -1,10 +1,11 @@
+#region ---- Imports ----
 from dataclasses import dataclass 
 import os
 import smartsheet
 import json
 import requests
+import logging
 import pandas as pd
-
 pd.set_option('future.no_silent_downcasting', True) #downcasting .fillna 
 
 # Local imports
@@ -13,18 +14,13 @@ from configs.setup_logger import setup_logger # for logging
 from clients.smartsheet_grid import grid # for getting data from smartsheet grid
 import configs.crypter as crypter
 import sys
+#endregion
 
 def get_resource_path(relative_path):
     """Resolves path to bundled or script-relative resource"""
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
-
-def get_writable_path(relative_path):
-    # Use %APPDATA% or local working dir
-    base = os.getenv("APPDATA") or os.path.abspath(".")
-    return os.path.join(base, relative_path)
-
 
 @dataclass
 class Project:
@@ -52,8 +48,8 @@ class Project:
 
 class AutoRM():
 
-    def __init__(self, log_path:str = None):
-        self.log = setup_logger(__name__, file_path=log_path)
+    def __init__(self, logger: logging.Logger):
+        self.log = logger
         self.log.info("Initializing RMManager...")
         
         #load config
@@ -89,7 +85,6 @@ class AutoRM():
         self.closed_projects = self.get_closed_projects() #list of Project objects of Closed or Completed DCT Status
         self.dct_pl_cols = self._get_column_map(self.DCT_PL_MIRROR_SHEET_ID) # get column mapping for posting updates
 
-    
     #region Main Functions -----------------------------------------------------------
     def sync_projects(self):
         """Main method to sync all projects by sending them to DCT Grid maker then RM Project maker, 
@@ -459,7 +454,6 @@ class AutoRM():
         #endregion 
     #endregion
 
-
     #region RM -----------------------------------------------------------------------
         #region Create RM Project
     def create_rm_projects(self, projects:list[Project]):
@@ -524,7 +518,7 @@ class AutoRM():
         Returns: dictionary of projects as name: {enum, id}
         Example: {"cool Project" : {enum: 02600, id: 1234567890}}
         """
-        self.log.info(f"Fetchign RM Projects...")
+        self.log.info(f"Fetching RM Projects...")
         endpoint = "/api/v1/projects?with_archived=true"
         self.rm_projects_map = {}
         self.rm_archived_map = {}
@@ -538,6 +532,8 @@ class AutoRM():
             else:
                 self.rm_projects_map[name] = project["id"] #assign project ID to name for map reference
         self.log.info(f"Total RM Projects: {len(self.rm_projects_map)+len(self.rm_archived_map)}")
+        self.log.debug(f"ACTIVE: {self.rm_projects_map}")
+        self.log.debug(f"ARCHIVED: {self.rm_archived_map}")
         
     
     def paginated_rm_getrequest(self, endpoint, header, params=None,):

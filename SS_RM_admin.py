@@ -9,11 +9,12 @@ import time
 import pandas as pd
 from configs.setup_logger import setup_logger
 from auto_rm import Project
+import logging
 #endregion
 
 class SmartsheetRmAdmin():
     '''admin for DCT's Resource Management tool that is part of SS'''
-    def __init__(self, config, log_path:str = None):
+    def __init__(self, config, logger = logging.Logger):
         self.config = config
         self.apply_config(config) # '''turns all config items into self.key = value'''
         #smartsheet setup
@@ -23,7 +24,7 @@ class SmartsheetRmAdmin():
         self.start_time = time.time()
 
         #logger
-        self.log = setup_logger(__name__, file_path=log_path)
+        self.log = logger
 
         self.rm_header = {
             'Content-Type': 'application/json',
@@ -32,7 +33,7 @@ class SmartsheetRmAdmin():
         self.error_w_hh2sheet = []
         self.base_url='https://api.rm.smartsheet.com'
 
-    #region Helpers --------------------------------------------------------------------
+    #region ---- Helpers --------------------------------------------------------------------
     def apply_config(self, config):
         '''turns all config items into self.key = value'''
         for key, value in config.items():
@@ -190,8 +191,7 @@ class SmartsheetRmAdmin():
         else:
             return result
     #endregion
-
-    #region Time & Expense -------------------------------------------------------------
+    #region ---- Time & Expense -------------------------------------------------------------
         #region Remedy No Sage id ------------------------------------------------------
     def grab_sage_id_dict(self):
         '''grab sage id // email dict from ss'''
@@ -460,8 +460,7 @@ class SmartsheetRmAdmin():
             return False
         #endregion
     #endregion
-
-    #region Project Syncing -------------------------------------------------------------
+    #region ---- Project Syncing -------------------------------------------------------------
     def grab_proj_sheetids(self):
         '''grabs the sheet ids of projects from the workspace id'''
         self.sheet_ids = {}
@@ -665,7 +664,7 @@ class SmartsheetRmAdmin():
                 self.log.info(f"{proj['name']} failed to update its custom fields")
         #endregion
     #endregion
-    #region Assignments -----------------------------------------------------------------
+    #region ---- Assignments -----------------------------------------------------------------
     def grab_rm_assignment_data(self, proj):
         '''grabs rm assignment data to check if any updates are needed'''
         rm_assignment_data_raw = self.paginated_rm_getrequest(f"/api/v1/projects/{proj['rm_id']}/assignments")
@@ -701,7 +700,7 @@ class SmartsheetRmAdmin():
             except ApiError:
                 self.log.error(f'updating the {proj["name"]} assignments failed')
     #endregion
-    #region post to ss ------------------------------------------------------------------
+    #region ---- post to ss ------------------------------------------------------------------
     def post_ss_data(self, data):
         '''posts back to ss a message if the message is different than what is currently there '''
         self.posting_data = []
@@ -716,6 +715,7 @@ class SmartsheetRmAdmin():
         sheet.update_rows(posting_data = self.posting_data, primary_key = "Script Key", update_type = "batch")
     #endregion
 
+    #region ---- Main Functions --------------------------------------------------------------
     def grab_rm_data(self):
         '''This updates archived projects.'''
         self.log.info("""Grabbing RM Data
@@ -791,18 +791,5 @@ class SmartsheetRmAdmin():
         self.run_hours_update()
         self.run_assignment_updates()
         self.log.info("""~Fin""")
-
-# if __name__ == "__main__":
-#     # https://app.smartsheet.com/sheets/GffHvGGxVJwQ9P8w8gwgfqrmJjcq39JXvMQmH7q1?view=grid is hh2 data sheet
-#     # https://app.smartsheet.com/browse/workspaces/GXmwRM4wcCmjMVGVjhJ2cWCFR9QWMQCr5w8WGrx1 is proj workspace
-#     with open("configs/config.json", "r") as inf:
-#         config = json.load(inf)
-
-#     sra = SmartsheetRmAdmin(config)
-#     sra.grab_rm_data()
-#     # this can get skipped is now done in auto_rm
-#     # sra.run_proj_metadata_update() 
-#     sra.run_hours_update()
-#     sra.run_assignment_updates()
-#     sra.log.info("""~Fin""")
+    #endregion
 

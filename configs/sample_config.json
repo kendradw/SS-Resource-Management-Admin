@@ -20,7 +20,6 @@
         "Parental Leave":"int"
     },
     
-    "DCT_RM_INTAKE_SHEET_ID": "int",
     "DCT_PL_MIRROR_SHEET_ID": "int",
     "PL_3_SHEET_ID": "int",
     "DCT_PLANNING_WORKSPACE_ID": "int",

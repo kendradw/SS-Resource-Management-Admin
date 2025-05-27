@@ -1,3 +1,4 @@
+#region ---- Imports ----
 from SS_RM_admin import SmartsheetRmAdmin
 from auto_rm import AutoRM
 import tkinter as tk
@@ -12,11 +13,13 @@ from smartsheet.models import Workspace
 from smartsheet.workspaces import Workspaces
 from smartsheet.models import Sheet
 from smartsheet.sheets import Sheets
-from configs.setup_logger import setup_logger, get_log_file_path
+from configs.setup_logger import setup_logger
 import time
 import sys
 import signal
+#endregion
 
+#region --------------- App file routing helpers -----
 def get_resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path)
@@ -26,12 +29,18 @@ def get_writable_path(relative_path):
     # Use %APPDATA% or local working dir
     base = os.getenv("APPDATA") or os.path.abspath(".")
     return os.path.join(base, relative_path)
-#logger
-log_path = get_writable_path("DCT_RM_Tools/log.log")
-os.makedirs(os.path.dirname(log_path), exist_ok=True)
-log = setup_logger(__name__)
 
-LOG_FILE_PATH = get_log_file_path()
+def get_log_file_path():
+    base_dir = os.getenv("APPDATA") or os.path.abspath(".")
+    log_dir = os.path.join(base_dir, "DCT_RM_Tools")
+    os.makedirs(log_dir, exist_ok=True)
+    return os.path.join(log_dir, "log.log")
+#endregion 
+
+#region ----------------- Logger & Exceptions ---------------------------
+LOG_FILE_PATH = get_writable_path("DCT_RM_Tools/log.log")
+os.makedirs(os.path.dirname(LOG_FILE_PATH), exist_ok=True)
+log = setup_logger(__name__, file_path=LOG_FILE_PATH)
 
 # Global uncaught exception handler
 def handle_exception(exc_type, exc_value, exc_traceback):
@@ -42,8 +51,9 @@ def handle_exception(exc_type, exc_value, exc_traceback):
     log.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
 
 sys.excepthook = handle_exception
+#endregion
 
-# --------------------- File Tailer (Live Log File Output) ---------------------
+#region--------------------- File Tailer (Live Log File Output) --------------
 def tail_log_file(file_path, interval=0.5):
     def follow():
         try:
@@ -61,8 +71,9 @@ def tail_log_file(file_path, interval=0.5):
         except FileNotFoundError:
             log_message(f"Log file not found: {file_path}")
     threading.Thread(target=follow, daemon=True).start()
+#endregion
 
-# --------------------- Button Logic ---------------------
+#region -------------------- Button Logic -----------------------
 def log_message(text):
     log_box.config(state=tk.NORMAL)
     log_box.insert(tk.END, f"{text}\n")
@@ -91,10 +102,12 @@ def confirm_and_run(action_name, action_fn):
                     b.config(state="normal")
 
         threading.Thread(target=run).start()
+#endregion
 
+#region -------------------- Main Function ----------------------
 # --------------------- Run Project Updates  ---------------------
 def run_project_updates():
-    rmm = AutoRM()
+    rmm = AutoRM(log)
     log.info("Syncing Projects...")
     rmm.sync_projects()
     log.info("Completed sync updates.")
@@ -105,7 +118,7 @@ def run_time_updates():
     with open(get_resource_path("configs/config.json"), "r") as f:
         config = json.load(f)
     log.info("Running hours updates...")
-    sra = SmartsheetRmAdmin(config)
+    sra = SmartsheetRmAdmin(config, log)
     sra.grab_rm_data()
     sra.run_hours_update()
     log.info("Completed hours updates.")
@@ -116,7 +129,7 @@ def run_assignment_updates():
     with open(get_resource_path("configs/config.json"), "r") as f:
         config = json.load(f)
     log.info("Running assignment updates...")
-    sra = SmartsheetRmAdmin(config)
+    sra = SmartsheetRmAdmin(config, log)
     sra.grab_rm_data()
     sra.run_assignment_updates()
     messagebox.showinfo("Complete", "Assignments updates complete.")
@@ -124,7 +137,7 @@ def run_assignment_updates():
 # --------------------- Run All Updates  ------------------------
 def run_all_updates():
     #---- Project Sync -----
-    rmm = AutoRM()
+    rmm = AutoRM(log)
     log.info("Syncing Projects...")
     rmm.sync_projects()
     log.info("---- Completed sync updates ----")
@@ -132,7 +145,7 @@ def run_all_updates():
     with open(get_resource_path("configs/config.json"), "r") as f:
         config = json.load(f)
     log.info("Running hours updates...")
-    sra = SmartsheetRmAdmin(config)
+    sra = SmartsheetRmAdmin(config, log)
     sra.grab_rm_data()
     sra.run_hours_update()
     log.info("---- Completed hours updates ----- ")
@@ -155,8 +168,9 @@ def style_button(btn, bg_color, fg_color, hover_color):
     btn.configure(bg=bg_color, fg=fg_color, activebackground=hover_color, relief="flat", cursor="hand2", bd=0)
     btn.bind("<Enter>", lambda e: btn.config(bg=hover_color))
     btn.bind("<Leave>", lambda e: btn.config(bg=bg_color))
+#endregion
 
-# --------------------- GUI Setup ---------------------
+#region -------------------- GUI Setup --------------------------
 root = tk.Tk()
 root.title("DCT RM Automation")
 root.geometry("600x520")
@@ -206,7 +220,6 @@ style_button(btn_all, "#D87F27", "white", "#BA6B1F")
 # Exit (charcoal gray)
 style_button(btn4, "#5C5C5C", "white", "#444444")
 
-
 # Log Output
 tk.Label(
     root,
@@ -235,3 +248,4 @@ tail_log_file(LOG_FILE_PATH)
 
 # Launch GUI
 root.mainloop()
+#endregion
