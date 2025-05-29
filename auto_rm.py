@@ -17,7 +17,7 @@ import sys
 #endregion
 
 def get_resource_path(relative_path):
-    """Resolves path to bundled or script-relative resource"""
+    """Resolves path to script-relative resource for .exe use"""
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
@@ -96,7 +96,7 @@ class AutoRM():
         #get/update closed/completed projects (Archive in RM + * in DCT sheet name)
         self.log.info("Syncing Closed/Completed projects..")
         self.update_closed_projects()
-        self.log.info("COMPLETE: Project sync finished")
+        self.log.info("---- COMPLETE: Project sync finished ----")
 
     def update_active_projects(self):
         """Creates DCT Sheet if needed. Creates RM project. Syncs Custom & Standard Fields"""

@@ -1,11 +1,12 @@
-""" Usage Sample
- if __name__ == "__main__":
+#region ---- Usage Sample ----
+""" if __name__ == "__main__":
      SHEETS = ["https://app.smartsheet.com/sheets/695wjPhPvCxh5m9Jpjf9FF3Fv97c2mF5cc75Rmw1?view=grid"]
      bot = SmartsheetBot(email=ss_username, password=ss_password, headless=False) #false for visibilty
      bot.login()
      for sheet_url in SHEETS:
          bot.track_workload(sheet_url)
      bot.close()"""
+#endregion
 #region ---- Imports ----
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -84,8 +85,7 @@ class SmartsheetBot:
         return
 
     def user_login_auto(self):
-        """Will input user log-in data for microsoft logi-in requires user MFA Verification. """
-
+        """Will input user log-in data for microsoft log-in requires user to complete MFA Verification."""
         username = crypter.decrypt_from_config("user")
         password = crypter.decrypt_from_config("pass")
  
