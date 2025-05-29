@@ -16,6 +16,6 @@ def main():
     srm = SmartsheetRmAdmin(config, log)
     srm.run_all()
     srm.run_assignment_updates()
-    #End
+
     log.info("----COMPLETE----")
 main()

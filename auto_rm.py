@@ -469,7 +469,7 @@ class AutoRM():
             #Initialize SS bot
             self.log.info("auto_rm Initializing Smartsheet Bot for RM...") 
             #TODO: Headless = False for watchign
-            smartbot = SmartsheetBot(self.ss_username, self.ss_password, headless=False)
+            smartbot = SmartsheetBot(self.ss_username, self.ss_password, logger= self.log, headless=False)
 
             smartbot.auto_login() #no user input log-in method
             self.log.info(f"Logged in to {self.ss_username} Smartsheet account for RM bot...")
