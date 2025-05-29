@@ -144,7 +144,7 @@ class SmartsheetBot:
                 self.log.info("Opened RM tab.")
                 time.sleep(7)  # give it time to load
 
-            # lick "Track workload" button
+            # Click "Track workload" button
             try:
                 workload_btn = self.wait.until(
                     EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[data-client-id="tk-landing-panel-track-workload-btn"]'))

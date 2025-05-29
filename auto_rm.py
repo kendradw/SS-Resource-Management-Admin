@@ -468,8 +468,8 @@ class AutoRM():
         if any(project.rm_project_bool is not True for project in projects):
             #Initialize SS bot
             self.log.info("auto_rm Initializing Smartsheet Bot for RM...") 
-            #TODO: Headless = False for watchign
-            smartbot = SmartsheetBot(self.ss_username, self.ss_password, logger= self.log, headless=False)
+            #TODO: Headless = False for viewing
+            smartbot = SmartsheetBot(self.ss_username, self.ss_password, logger= self.log, headless=True)
 
             smartbot.auto_login() #no user input log-in method
             self.log.info(f"Logged in to {self.ss_username} Smartsheet account for RM bot...")
