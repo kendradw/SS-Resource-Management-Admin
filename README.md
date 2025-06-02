@@ -68,7 +68,7 @@ This project automates project and time management workflows by integrating Smar
 #### How it works:
 - sb = SmartsheetBot(username, password)
 - auto_login()
-  - Logs in to Smarthseet with username/password for automation@dowbuilt.com (MFA not required)
+  - Logs in to Smarthseet with username/password for automation@dowbuilt.com 
 - track_workload(sheet_url)
   - Simulates clicking the "Track Workload" button for the given sheet_url
 
@@ -116,42 +116,4 @@ python main.py
 ```
 python auto_main.py
 ```
-### Config Requirements
 
-```
-    "smartsheet_token": "",
-    "rm_token": "",
-    "hh2_data_sheetid": ,
-    "hris_data_sheetid": ,
-    "proj_workspace_id": ,
-    "proj_list_sheetid": ,
-    "rm_to_ss_status_ids": {
-        "550725": "Planned",
-        "550729": "Active",
-        "550726": "Potential",
-        "550730": "Completed",
-        "684245": "Check-in",
-        "684246": "Not Completed",
-        "698235": "Blocked"
-    },
-    "rm_leave_type_ids":{
-        "Vacation":, 
-        "Sick":, 
-        "Parental Leave":
-    },
-    
-    "DCT_RM_INTAKE_SHEET_ID": ,
-    "DCT_PL_MIRROR_SHEET_ID": ,
-    "PL_3_SHEET_ID": ,
-    "DCT_PLANNING_WORKSPACE_ID": ,
-    
-    "rm_token_key": "",
-    "rm_token_token": "",
-    
-    "ss_auto_token_key": "",
-    "ss_auto_token_token": "",
-    
-    "ss_username": "automation@dowbuilt.com",
-    "ss_auto_password_key": "",
-    "ss_auto_password_token": "",
-  ```
