@@ -10,7 +10,6 @@ pd.set_option('future.no_silent_downcasting', True) #downcasting .fillna
 
 # Local imports
 from smartsheet_bot import SmartsheetBot # for automating smartsheet workload tracking
-from configs.setup_logger import setup_logger # for logging
 from clients.smartsheet_grid import grid # for getting data from smartsheet grid
 import configs.crypter as crypter
 import sys
@@ -515,7 +514,7 @@ class AutoRM():
         #region Fetch RM Data -------------------------------------------------------
     def _fetch_rm_map(self):
         """Gets a list of RM project names, enums, and IDs 
-        Returns: dictionary of projects as name: {enum, id}
+        Returns: None, sets self.rm_projects_map
         Example: {"cool Project" : {enum: 02600, id: 1234567890}}
         """
         self.log.info(f"Fetching RM Projects...")

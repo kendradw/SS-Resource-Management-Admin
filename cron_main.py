@@ -10,12 +10,35 @@ def main():
     # Sync Projects (DCT + RM)
     arm = AutoRM(log)
     arm.sync_projects()
+
+    # ---- print data ------
+    with open("rm_map.json", "w") as of:
+        json.dump(arm.rm_projects_map, of, indent=2)
+    with open("dct_sheets.json", "w") as of:
+        json.dump(arm.existing_dct_sheets, of, indent=2)
+    # ----------------------
+
     # Sync Data (Hours + Assignments)
     with open("configs/config.json", "r") as f:
         config = json.load(f)
     srm = SmartsheetRmAdmin(config, log)
     srm.run_all()
-    srm.run_assignment_updates()
 
     log.info("----COMPLETE----")
 main()
+
+def debug():
+    log = setup_logger(__name__, file_path="configs/log.log")
+    # log.info("Starting debug...")
+    # arm = AutoRM(log)
+    # with open("rm_map.json", "w") as of:
+    #     json.dump(arm.rm_projects_map, of, indent=2)
+
+    ##checking hh2 issue Forrest bibao
+    # with open("configs/config.json", "r") as f:
+    #     config = json.load(f)
+    # srm = SmartsheetRmAdmin(config, log)
+    # srm.grab_rm_userids()
+    # srm.fetch_and_prepare_hh2_data()
+
+# debug()

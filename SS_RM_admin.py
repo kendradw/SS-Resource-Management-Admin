@@ -7,7 +7,6 @@ import requests
 import json
 import time
 import pandas as pd
-from configs.setup_logger import setup_logger
 from auto_rm import Project
 import logging
 #endregion
@@ -210,9 +209,10 @@ class SmartsheetRmAdmin():
         '''updates employee to have employee number'''
         for user in self.needs_emplnum_update:
             data = {
-                'employee_number': self.sage_id_dict[user['email'].lower()]
+                'employee_number': self.sage_id_dict.get(user['email'].lower(), None)
             }
-
+            if data.get("employee_number") is None:
+                self.log.error(F"!-------- ERROR: {user} does not have employee number --------!")
             response = requests.put(f"https://api.rm.smartsheet.com/api/v1/users/{user['rm_usr_id']}", headers=self.rm_header, data=json.dumps(data))
 
             if response.status_code == 200:
@@ -536,7 +536,7 @@ class SmartsheetRmAdmin():
         endpoint = f"/api/v1/projects/{proj['rm_id']}"
         standard_response = self.paginated_rm_getrequest(endpoint = endpoint)
         custom_response = self.paginated_rm_getrequest(endpoint = endpoint+"/custom_field_values")
-        print(custom_response)
+        # print(custom_response)
 
         if standard_response and custom_response:
             status, status_id, arch, arch_id, enum, enum_id, estimate, estimate_id, estimate_presented, estimate_presented_id = '', '', '', '', '', '', '', '', '', ''
@@ -633,7 +633,7 @@ class SmartsheetRmAdmin():
                     response3 = requests.put(f"https://api.rm.smartsheet.com/api/v1/projects/{proj['id']}", headers=self.rm_header, data=json.dumps(data3))
 
                     if response1.status_code and response2.status_code and response3.status_code == 200:
-                        self.log.info(f"Correctly Archived {proj['name']}")
+                        self.log.debug(f"Correctly Archived {proj['name']}")
                     else:
                         self.log.error(f"error with update- 1:{response1.json()} 2:{response2.json()} 3:{response3.json()}")
         self.grab_rm_projids()
@@ -676,6 +676,9 @@ class SmartsheetRmAdmin():
             task_name = assignment.get('description')
             rm_status_id = assignment.get('status_option_id')
             rm_status = self.rm_to_ss_status_ids.get(str(rm_status_id)) 
+            if not assignment.get("percent", None):
+                self.log.error(f"ERROR: {proj['name']} has no percent.")
+                continue
             rm_task_name_backend_key = task_name + "|" + str(self.custom_round(assignment.get('percent'), 1)) + "|" +  str(self.convert_date_format(assignment.get('starts_at'), True)) + "|" + str(self.convert_date_format(assignment.get('ends_at'), True))
             rm_assignment_data.append({rm_task_name_backend_key:rm_status})
             ss_status = proj['ss_assignment_data'].get(rm_task_name_backend_key)
@@ -770,21 +773,32 @@ class SmartsheetRmAdmin():
         '''assignments in rm are linked to users and projects and are line-item tasks in ss per project'''
         self.log.info("""Project Assignment Updates:
                      """)
+         # ensure ss_proj_list is initialized
+        if not hasattr(self, 'ss_proj_list'):
+            self.grab_proj_sheetids()
+            self.establish_sheet_connection()
+        # print(self.ss_proj_list)
         try:    
-            for proj in self.ss_proj_list:
+            for proj_i, proj in enumerate(self.ss_proj_list):
+                tot = len(self.ss_proj_list)
+                self.log.info(f"{proj_i+1}/{tot}  Assessing {proj['name']}...")
                 if proj['status'] == 'connected':
+                    self.grab_connected_sheet_data(proj_i, proj)
                     update = self.grab_rm_assignment_data(proj)
                     self.update_assignments_in_ss(update,proj)            
         except AttributeError:
-            self.grab_proj_sheetids()
-            self.establish_sheet_connection()
-            tot = len(self.ss_proj_list)
-            for proj_i, proj in enumerate(self.ss_proj_list):
-                self.log.info(f"{proj_i+1}/{tot}  Assessing {proj['name']}...")
-                self.grab_connected_sheet_data(proj_i, proj)
-                if proj['status'] == 'connected':
-                    update = self.grab_rm_assignment_data(proj)
-                    self.update_assignments_in_ss(update,proj)
+            self.log.error(f"Error updating assignments for {proj['name']}: {e}")
+            # self.grab_proj_sheetids()
+            # self.establish_sheet_connection()
+            # tot = len(self.ss_proj_list)
+            # for proj_i, proj in enumerate(self.ss_proj_list):
+            #     self.log.info(f"{proj_i+1}/{tot}  Assessing {proj['name']}...")
+            #     try:
+            #         self.grab_connected_sheet_data(proj_i, proj)
+            #         update = self.grab_rm_assignment_data(proj)
+            #         self.update_assignments_in_ss(update,proj)
+            #     except Exception as e:
+            #         self.log.error(f"Error updating assignments for {proj['name']}: {e}")
 
     def run_all(self):
         self.grab_rm_data()

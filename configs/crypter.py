@@ -3,7 +3,7 @@ import os
 import sys
 import json
 from typing import Union
-from configs.setup_logger import setup_logger
+# from configs.setup_logger import setup_logger
 
 def get_resource_path(relative_path):
     """Resolves path to bundled or script-relative resource"""
@@ -12,7 +12,7 @@ def get_resource_path(relative_path):
     return os.path.join(os.path.abspath("."), relative_path)
 
 # Updated log file path (logs to same dir as .py or .exe)
-log = setup_logger(__name__)
+# log = setup_logger(__name__)
 
 def encrypt(secret_message: str):
     """Returns encrypted secret message"""
@@ -57,9 +57,9 @@ def encrypt_to_config(secret_string: str, name: str, file_path: str = None):
     try:
         with open(file_path, 'w') as f:
             json.dump(config, f, indent=4)
-            log.info(f"SUCCESS: Stored keys in {file_path}")
+            print(f"SUCCESS: Stored keys in {file_path}")
     except Exception as e:
-        log.error(f"ERROR writing to config: {e}")
+        print(f"ERROR writing to config: {e}")
 
 def decrypt_from_config(name: str, file_path: str = None):
     key_name = f"{name}_key"

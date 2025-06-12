@@ -17,7 +17,6 @@ from selenium.common.exceptions import TimeoutException
 from selenium.common.exceptions import StaleElementReferenceException
 import time
 import logging
-from configs.setup_logger import setup_logger
 import configs.crypter as crypter
 import sys
 import os
