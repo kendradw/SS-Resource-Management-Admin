@@ -622,7 +622,7 @@ class SmartsheetRmAdmin():
                     data2 = {
                         'id':proj['id'],
                         'project_code':" ",
-                        'name': f"{proj['name']}"
+                        'name': f"{proj['name']}_ARCHIVED"
                     }
                     data3 ={
                         'id':proj['id'],
@@ -673,13 +673,10 @@ class SmartsheetRmAdmin():
         assignment_update_message = {}
         need_to_update = False
         for assignment in rm_assignment_data_raw:
-            task_name = assignment.get('description')
+            task_name = assignment.get('description', "")
             rm_status_id = assignment.get('status_option_id')
             rm_status = self.rm_to_ss_status_ids.get(str(rm_status_id)) 
-            if not assignment.get("percent", None):
-                self.log.error(f"ERROR: {proj['name']} has no percent.")
-                continue
-            rm_task_name_backend_key = task_name + "|" + str(self.custom_round(assignment.get('percent'), 1)) + "|" +  str(self.convert_date_format(assignment.get('starts_at'), True)) + "|" + str(self.convert_date_format(assignment.get('ends_at'), True))
+            rm_task_name_backend_key = str(task_name) + "|" + str(self.custom_round(assignment.get('percent'), 1)) + "|" +  str(self.convert_date_format(assignment.get('starts_at'), True)) + "|" + str(self.convert_date_format(assignment.get('ends_at'), True))
             rm_assignment_data.append({rm_task_name_backend_key:rm_status})
             ss_status = proj['ss_assignment_data'].get(rm_task_name_backend_key)
             # only adds to list if out of sync
@@ -698,10 +695,10 @@ class SmartsheetRmAdmin():
         if update:
             try:
                 proj['sheet_grid_obj'].update_rows(proj['ss_assignment_to_new_status'], 'Task Name - Backend Key')
-            except ValueError:
-                self.log.error(f'row update failed b/c row was missing from {proj["name"]} Smartsheet')
-            except ApiError:
-                self.log.error(f'updating the {proj["name"]} assignments failed')
+            except ValueError as ve:
+                self.log.error(f'row update failed b/c row was missing from {proj["name"]} Smartsheet {ve}')
+            except ApiError as ae:
+                self.log.error(f'updating the {proj["name"]} assignments failed for update {update} {ae}')
     #endregion
     #region ---- post to ss ------------------------------------------------------------------
     def post_ss_data(self, data):
@@ -725,7 +722,7 @@ class SmartsheetRmAdmin():
                      """)
         self.grab_rm_userids()
         self.audit_users_emplnum()
-        self.update_archived_projects()
+        #self.update_archived_projects()
         self.grab_rm_projids()
 
     def run_hours_update(self):

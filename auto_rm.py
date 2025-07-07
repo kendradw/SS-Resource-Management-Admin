@@ -80,9 +80,11 @@ class AutoRM():
         self.template_sheet_id = self._fetch_template() #template grid in SS with the correct formulas. Will find sheet starting with "<PROJECT NAME> TEMPLATE"
         self.existing_dct_sheets = self._get_existing_dct_sheets() #dictionary of existing DCT sheets for reference
         self.dct_pl_df = self.fetch_dct() # dataframe of the entire DCT PL Mirror
-        self.active_projects = self.get_active_projects() #list of Project objects of active DCT projects based on DCT Status
-        self.closed_projects = self.get_closed_projects() #list of Project objects of Closed or Completed DCT Status
+        self.active_projects = self.fetch_active_projects() #list of Project objects of active DCT projects based on DCT Status
+        self.closed_projects = self.fetch_closed_projects() #list of Project objects of Closed or Completed DCT Status
         self.dct_pl_cols = self._get_column_map(self.DCT_PL_MIRROR_SHEET_ID) # get column mapping for posting updates
+        self.created_grids = [] #list of newly created projects to link fetch RM ID to link to DCT PL
+        self.need_rm = [] # list of projects to be sent to selenium to "track workload"
 
     #region Main Functions -----------------------------------------------------------
     def sync_projects(self):
@@ -90,45 +92,65 @@ class AutoRM():
         then posts updates to smartsheet. Updates summary fields in RM and Archives orojects marked completed or closed."""
         #get/update all active DCT Projects
         self.log.info("Syncing active projects..")
-        self.update_active_projects() # this will create the initial list
+        self.handle_active_projects() # this will create the initial list
         
         #get/update closed/completed projects (Archive in RM + * in DCT sheet name)
         self.log.info("Syncing Closed/Completed projects..")
         self.update_closed_projects()
         self.log.info("---- COMPLETE: Project sync finished ----")
 
-    def update_active_projects(self):
+    def handle_active_projects(self):
         """Creates DCT Sheet if needed. Creates RM project. Syncs Custom & Standard Fields"""
         #create all dct sheets first, then create RM sheets, then update all
         active_projects = self.active_projects
-        for project in active_projects:
+        for project in active_projects: # create grid loop
             #check if needs dct sheet
-            if project.dct_grid_bool == False or project.rm_project_bool == False:
-                project = self._check_existing(project) #check if there's an existing sheet
-                if project.dct_grid_bool == False: # now check again if it needs one
+            if project.dct_grid_bool is False:
+                project = self._check_existing_grid(project) #check if there's an existing sheet that didn't get linked
+                if project.dct_grid_bool is False: # now check again if it needs one
                     project = self.create_dct_grid(project) # then create
-        
-        self.update_dct_ss(active_projects) # all dct sheets have been created - update smartsheet
-        #Create RM Projects
-        self.log.info("Syncing RM Projects...")
-        active_projects = self.create_rm_projects(active_projects)
-        self.log.info("Logging new RM projects to DCT PL...")
-        self.update_dct_ss(active_projects) # all RM Projects have been created/updated - update smartsheet
+            if project.dct_grid_url and project.rm_project_id is None: #there's a grid but no RM
+                project = self._check_existing_rm(project) #check if there's an existing project that got lost
+                if project.rm_project_id is None: # if it still needs an RM project
+                    self.need_rm.append(project)
+        self.post_to_dct_pl(active_projects) # all dct sheets have been created - update smartsheet
+        #Create all RM projects that need one
+        if self.need_rm:
+            self.log.info(f"Creating {len(self.need_rm)} RM Projects...")
+            created = self.create_rm_project(self.need_rm) #creates but does not fetch ID
+            created = self.instantiate_rm_projects(created) # fetches ID and sets summary fields
+            self.log.info("Logging new RM project ID's to DCT PL...")
+            self.post_to_dct_pl(active_projects) # all RM Projects have been created/updated - update smartsheet
+
+        for project in active_projects: #sync all fields for connected projects
+            if project.dct_grid_url and project.rm_project_id:
+                self.sync_rm_fields(project)
+        self.log.info(f"---- ACTIVE PROJECT SYNC COMPLETE ----")
+
 
     def update_closed_projects(self):
         self.log.info(f"Found {len(self.closed_projects)} closed/completed projects")
         closed_projects = self.closed_projects
         for project in closed_projects:
-            if project.rm_project_id is None and project.archived is False:
-                project = self._check_existing(project) #check if there's an existing sheet
-            #Has RM ID and not yet archived
-            if project.rm_project_bool and not project.archived: #needs to be archived
+            #this was to catch projects that were created manually in RM and not tracked on DCT PL - leaving off for now. 
+            # if self.rm_archived_map.get(project.name):
+            #     self.log.info(f"Logging existing archived RM project for {project.name}")
+            #     project.rm_archived = True
+            #     project.rm_project_id = self.rm_archived_map.get(project.name)
+            # if project.dct_status != "Closed" and project.dct_status != "Complete":
+            #     self.log.error(f"ERROR: PROJECT IS NOT TO BE ARCHIVED {project.enum} {project.name} - {project.dct_status}")
+            # if project.rm_project_id is None and project.archived is False:
+            #     project = self._check_existing(project) #check if there's an existing sheet
+            # #Has RM ID and not yet archived
+            if project.rm_project_id and not project.archived: #needs to be archived
+                if project.rm_project_id in self.rm_archived_list:
+                    project.archived = True
                 project = self._archive_rm(project)
                 project = self._archive_grid_name(project)
         
         #logging archive to DCT PL sheet
-        self.log.info(F"Updating DCT PL with Archive Status")
-        self.update_dct_ss(self.closed_projects) # mark off the archived projects to the ss
+        self.log.info(F"Updating DCT PL with Archive Status for")
+        self.post_to_dct_pl(self.closed_projects) # mark off the archived projects to the ss
     #endregion
 
     #region Smartsheet ---------------------------------------------------------------
@@ -141,17 +163,20 @@ class AutoRM():
         # access DCT RM Intake sheet
         dct_pl = grid(self.DCT_PL_MIRROR_SHEET_ID)
         dct_pl.fetch_content()
+        if dct_pl.df.empty:
+            self.log.error(f"ERROR: Fetching DCT PL ... Closing program")
+            exit(-1)
         self.log.info(f"Retrieved DCT PL sheet info...")
         return dct_pl.df
 
-    def update_dct_ss(self, project_list:list[Project]):
+    def post_to_dct_pl(self, project_list:list[Project]):
         """ Updates the DCT PL Mirror with new project data. Updates columns: DCT Planning Grid, RM Project, DCT Grid URL, RM Project ID, 
         Parameters:
             project_list: Project objects / rows to update. 
         """
         #compare against original to only post changes #add originals from original dataframe
-        originals= self.get_active_projects()
-        originals.extend(self.get_closed_projects()) #add the closed/completed projies
+        originals= self.fetch_active_projects()
+        originals.extend(self.fetch_closed_projects()) #add the closed/completed projies
         # create a list of rows to update   
         updated_rows = []
         updated_projects = []
@@ -166,7 +191,7 @@ class AutoRM():
             cell1 = self._create_ss_cell(self.dct_pl_cols["DCT Planning Grid"], project.dct_grid_bool)
             cell2 = self._create_ss_cell(self.dct_pl_cols["RM Project"], project.rm_project_bool)
             cell3 = self._create_ss_cell(self.dct_pl_cols["DCT Grid URL"], project.dct_grid_url)
-            cell4 = self._create_ss_cell(self.dct_pl_cols["RM Project ID"], project.rm_project_id)
+            cell4 = self._create_ss_cell(int(self.dct_pl_cols["RM Project ID"]), project.rm_project_id)
             cell5 = self._create_ss_cell(self.dct_pl_cols["RM Archived"], project.archived)
             cell6 = self._create_ss_cell(self.dct_pl_cols["Error"], project.error)
             for cell in [cell1, cell2, cell3, cell4, cell5, cell6]:
@@ -186,28 +211,29 @@ class AutoRM():
     
     def _archive_grid_name(self, project:Project):
         """Adds * to archive project name"""
-        grid_name = self.existing_dct_sheets.get(project.enum, {}).get("name",)
-        if grid_name is None:
+        grid_name = self.existing_dct_sheets.get(project.enum, {}).get("name", None)
+        sheet_id = self.existing_dct_sheets.get(project.enum, {}).get("id", None)
+        if grid_name is None or sheet_id is None:
             project.error += "No DCT sheet found"
             return project
         #necessity checking
         if grid_name[-1] == "*":
             return project
         
-        new_name=project.name+"*"
+        new_name=grid_name+"*"
         try:
             updated_sheet = self.smart.Sheets.update_sheet(
             # sheet id
-            int(self.existing_dct_sheets.get(project.enum).get("id")), 
+            int(sheet_id), 
             # new name
             smartsheet.models.Sheet({
                 'name': new_name}))
         except Exception as e:
-            self.log.error(f"Error updating archived sheet name: {project.name} - {e}")
+            self.log.error(f"Error updating archived sheet name: {grid_name} - {e}")
             project.error += f"Error updating sheet name: {e}"
         return project
     
-    def get_active_projects(self):
+    def fetch_active_projects(self):
         """Fetches active projects and returns list of Project objects. 
         Active Projects are wheere DCT Status != "Closed" "Complete" or "Inactive". All other statuses are considered active.
         """
@@ -215,13 +241,15 @@ class AutoRM():
         active = self.dct_pl_df[~self.dct_pl_df["DCT Status"].isin(["Inactive", "Complete", "Closed"])]
         active = active[active["DCT Status"].notna()]
         active_projects = self._df_to_proj_obj(active) # convert df to list of Project objects
+        self.log.info(f"Retrieved {len(active_projects)} from DCT PL")
         return active_projects
     
-    def get_closed_projects(self):
+    def fetch_closed_projects(self):
         """Fetches closed or completed projects and returns a list of Project objects."""
         #DCT Status is complete, or closed 
         closed = self.dct_pl_df[self.dct_pl_df["DCT Status"].isin(["Complete", "Closed"])]
         closed_projects = self._df_to_proj_obj(closed)
+        self.log.info(f"Retrieved {len(closed)} from DCT PL")
         return closed_projects
 
     def _df_to_proj_obj(self, dataframe):
@@ -236,7 +264,7 @@ class AutoRM():
                 estimate=row["ESTIMATE"],
                 dct_status=row["DCT Status"],
                 estimate_presented=row["Estimate Presented"],
-                project_code=row["JOB NUMBER"],
+                project_code=row["JOB NUMBER FIXED"],
                 client=row["REGION"],
                 dct_grid_bool=bool(row["DCT Planning Grid"]),
                 rm_project_bool=bool(row["RM Project"]), 
@@ -321,33 +349,36 @@ class AutoRM():
         except Exception as e:
             self.log.error(f"EXCEPTION: {e}")
         
-    def _check_existing(self, project:Project):
+    def _check_existing_grid(self, project:Project):
         """Checks for existing DCT grid and RM project. Will link existing grid to project or will produce error message that posts to smartsheet."""
         if project.dct_grid_bool is False:
             if project.enum in self.existing_dct_sheets:
                 project.dct_grid_bool = True
                 project.dct_grid_url =self.existing_dct_sheets.get(project.enum).get("url")
                 self.log.info(f"Logging existing dct sheet for project {project.enum} '{project.name}'")
+        return project
+    
+    def _check_existing_rm(self, project:Project):
+        """Helps find lost RM projects. If an RM project was created but not properly linked to the DCT PL project."""
         if project.rm_project_bool is False:
             sheet_name = self.existing_dct_sheets.get(project.enum, {}).get("name", None)
             if sheet_name is None:
                 return project
-            if sheet_name.endswith("*"): 
-                sheet_name = sheet_name.rstrip("*")
-            if project.name in self.rm_projects_map:
-                project.rm_project_bool = True
-                project.rm_project_id = self.rm_projects_map[project.name]
-            elif sheet_name in self.rm_projects_map:
-                project.rm_project_bool = True
-                project.rm_project_id = self.rm_projects_map[sheet_name]
-            elif project.name in self.rm_archived_map:
-                project.archived = True
-                project.rm_project_id = self.rm_archived_map[project.name]
-                project.rm_project_bool = True
-            elif sheet_name in self.rm_projects_map:
-                project.rm_project_bool = True
-                project.rm_project_id = self.rm_projects_map[sheet_name]
-            self.log.info(f"Logging existing RM project for {project.name}")
+            if sheet_name in self.rm_projects_map: #there's a matching sheet name
+                rm_enum = self._get_rm_enum(self.rm_projects_map[sheet_name]) #validate enumerator is matches or is empty (newly instantiated project)
+                if  rm_enum == project.enum or rm_enum is None:
+                    self.log.info(f"Found lost RM project for. Linking existing RM project for {project.name} {project.enum} to RM ID: {self.rm_projects_map[project.name]}")
+                    project.rm_project_bool = True
+                    project.rm_project_id = self.rm_projects_map[project.name]
+                    
+            # ---- Backtracking logic -----
+            # if sheet_name.endswith("*"): #for backtracking, may cause errors moving forward?
+            #     sheet_name = sheet_name.rstrip("*")
+            # elif project.name in self.rm_archived_map: #backtracking - may cause future errors?
+            #     project.archived = True 
+            #     project.rm_project_id = self.rm_archived_map[project.name] 
+            #     project.rm_project_bool = True
+            
         return project
         #endregion
         
@@ -364,11 +395,11 @@ class AutoRM():
                     - project.dct_grid_url
         """
         # Necessity checking & logging
-        if project.dct_grid_bool == True:
-            self.log.info(f"Existing sheet for {project.name}")
+        if project.dct_grid_url:
+            self.log.info(f"Existing sheet for {project.name}: {project.dct_grid_url}")
             return
         else:
-            self.log.info(f"Creating DCT grid sheet for {project.name}...")
+            self.log.info(f"Creating DCT grid sheet for {project.enum} {project.name}...")
 
         # Request
         url = f"https://api.smartsheet.com/2.0/workspaces/{self.DCT_PLANNING_WORKSPACE_ID}/sheets?include=data,attachments,cellLinks,discussions,filters,forms,ruleRecipients,rules"
@@ -377,7 +408,7 @@ class AutoRM():
             "Content-Type": "application/json"
         }
         payload = {
-            "name": project.name,
+            "name": f"{project.name}_{project.enum}", #create with enum for unique matching, this can be removed later on. 
             "fromId": self.template_sheet_id,
         }
         self.log.info("Creating DCT Grid...")
@@ -455,16 +486,12 @@ class AutoRM():
 
     #region RM -----------------------------------------------------------------------
         #region Create RM Project
-    def create_rm_projects(self, projects:list[Project]):
-        """Creates new RM projects for each project in the list that does not already have a RM project.
-        Uses the RM API to create the project. Does not add custom fields yet.
-        Updates the project object with the RM project ID and name, and sets the rm_project_bool to True.
-        This function is called after the DCT grid has been created for the project.
-        Calls _verify_rm_creation to verify that the RM projects were created successfully.
-        Params: None
-        Returns: True if project was created, False if project already exists or failed to create.
+    def create_rm_project(self, projects:list[Project]):
+        """Creates new RM projects for each project in the list using selenium.
+        Params: projects: list of projects to create RM Project for.
+        Returns: updated projects list
         """
-        if any(project.rm_project_bool is not True for project in projects):
+        if any(project.rm_project_bool is not True for project in projects): #make sure atleast one needs it and it was not an error
             #Initialize SS bot
             self.log.info("auto_rm Initializing Smartsheet Bot for RM...") 
             #TODO: Headless = False for viewing
@@ -474,23 +501,20 @@ class AutoRM():
             self.log.info(f"Logged in to {self.ss_username} Smartsheet account for RM bot...")
 
             for project in projects: # loop through sync list
-                if project.rm_project_bool is True: #skip created one
-                    continue
-                # Create new RM project
-                if project.dct_grid_url > '' and project.rm_project_bool == False:
+                if project.dct_grid_url and project.rm_project_bool == False:
                     self.log.info(f"Creating RM Project: {project.name}...")
                     if  not smartbot.track_workload(project.dct_grid_url): #track_workload returns bool
                         self.log.error(f"Failed to create RM project: {project.name}")
                         project.rm_project_bool = False
                         project.error = f"Failed to create RM project: {project.name}"
-                
+                    else:
+                        # If workload was tracked, add to list of newly created projects. 
+                        self.created_grids.append(project)
             smartbot.close() # Close the bot session
-        # verify that RM projects were created & update summary fields
-        projects = self.verify_sync_rm_project(projects) #verify if a project was created and mark project.rm_project_bool true, updates custom fields
         return projects #send em back!
         
     def verify_sync_rm_project(self, projects:list[Project]):
-        """Verifies that the RM projects were created by comparing the RM projects to the todo list.
+        """Verifies that the RM projects were created by searching repulling all RM projects and searching for the newly added name.
         Compares by name.
         Params: None   
         """
@@ -503,12 +527,29 @@ class AutoRM():
                 #Check if summary fields need updates
             if project.rm_project_bool == True:
                 self.log.info(f"Checking summary fields for {project.enum} '{project.name}'")
-                project = self.rm_field_updates(project)
+                project = self.sync_rm_fields(project)
             else: #if its not in the RM list, a project didn't get created :(
                 self.log.error(f"ERROR: '{project.name}' Not found in RM list...")
                 project.error += f"ERROR: Verify Sync - RM Creation error"
                 project.rm_project_bool = False
         return projects #Send em back
+    
+    def instantiate_rm_projects(self, created_projects:list[Project]):
+        """Refetches the list of RM projects to search for projects in self.created_projects(). Instantiates the RM project summary fields"""
+        self._fetch_rm_map() #grab updated data. saves to self.rm_projects_map and self.rm_archived_map
+        #match to enumerator added RM project name
+        for project in created_projects:
+            name_enum = f"{project.name}_{project.enum}"
+            if name_enum in self.rm_projects_map: #these should be unique, matched by enum appended to end of name
+                project.rm_project_bool = True
+                project.rm_project_id = self.rm_projects_map[name_enum] #store the rm id
+                # set initial summary fields
+                self.sync_rm_fields(project)
+            else:
+                error = f"Newly created project grid {project.name} {project.dct_grid_url} not found in RM." 
+                self.log.error(error) # log to log
+                project.error += error # log to ss
+        return created_projects
         #endregion
     
         #region Fetch RM Data -------------------------------------------------------
@@ -520,19 +561,17 @@ class AutoRM():
         self.log.info(f"Fetching RM Projects...")
         endpoint = "/api/v1/projects?with_archived=true"
         self.rm_projects_map = {}
-        self.rm_archived_map = {}
+        self.rm_archived_list = []
         data = self.paginated_rm_getrequest(endpoint, self.rm_header)
         for project in data: # loop through projects
             name = str(project["name"])
             if project["archived"] == True:
-                if name.endswith("_ARCHIVE"):
-                    name = name[:-8]  # Remove last 8 characters
-                self.rm_archived_map[name] = project["id"]
+                self.rm_archived_list.append(project["id"])
             else:
                 self.rm_projects_map[name] = project["id"] #assign project ID to name for map reference
-        self.log.info(f"Total RM Projects: {len(self.rm_projects_map)+len(self.rm_archived_map)}")
+        self.log.info(f"Total RM Projects: {len(self.rm_projects_map)+len(self.rm_archived_list)}")
         self.log.debug(f"ACTIVE: {self.rm_projects_map}")
-        self.log.debug(f"ARCHIVED: {self.rm_archived_map}")
+        self.log.debug(f"ARCHIVED: {self.rm_archived_list}")
         
     
     def paginated_rm_getrequest(self, endpoint, header, params=None,):
@@ -566,7 +605,8 @@ class AutoRM():
         """Gets the RM project fields for the given project from the RM API. 
         Default to custom fields, if standard = True will return standard fields.
         Params: rm_id - RM project ID
-        Returns: RM project custom fields as a list of dictionaries or None if not found"""
+        Returns: EITHER custom fields as a list of dictionaries [{"custom_field_name": field name, "value": field value, "id":field uid}, {...}].
+        OR With standard = true, standard fields return as dictionary {"client":, "project_code":}"""
         url = f"{self.rm_base_url}/api/v1/projects/{rm_id}/custom_field_values"
         if standard == True:
             url = f"{self.rm_base_url}/api/v1/projects/{rm_id}"
@@ -584,20 +624,27 @@ class AutoRM():
         else:
             self.log.error(f"ERROR: Failed to get RM project {rm_id} fields from {url}: ERROR MESSAGE: {response.text}")
             return f"ERROR: Failed to get RM project {rm_id} fields from {url}: ERROR MESSAGE: {response.text}"
-
+        
+    def _get_rm_enum(self, rm_id):
+        """Retrieves enumerator from RM project. Returns -1 if field not found"""
+        cfields = self._get_rm_fields(rm_id)
+        for field in cfields:
+            field_name, value = field["custom_field_name"], field["value"]
+            if field_name == "Project Enumerator":
+                return value
+        self.log.error(F"ERROR: custom field 'Project Enumerator' not found for RM project {rm_id}")
+        return -1
         #endregion
         #region Post Updates -----------------------------------------------------
-    def rm_field_updates(self, project:Project):
+    def sync_rm_fields(self, project:Project):
         """Checks and updates Standard and Custom fields for a project. If there are no differences it will not post the update to RM.
-        Calls _get_rm_fields() to get custom and standard field id's and values
-        Checks for differences in the values
-        Sends updates if necessary """
+        Will only change enumerator and job code if fields are blank in RM. Fields should be static and updates should not be made once set."""
         #validity checking
-        if project.rm_project_id == None:
+        if project.rm_project_id is None:
             self.log.info(f"{project.name} does not have an RM sheet...")
             return
         cu_fields = self._get_rm_fields(project.rm_project_id)
-        if isinstance(cu_fields, str):
+        if isinstance(cu_fields, str): #returns error string 
             project.error += cu_fields
             return project
         # Get all the fieds that need to be updated
@@ -608,7 +655,7 @@ class AutoRM():
                 if value != project.dct_status:
                     update_custom[rm_id] = project.dct_status
             elif field_name == "Project Enumerator":
-                if value != project.enum:
+                if value is None and project.enum: # should only update once
                     update_custom[rm_id] = project.enum
             elif field_name == "Architect":
                 if value != project.architect:
@@ -625,25 +672,28 @@ class AutoRM():
             if value:#make sure something exists, idk
                 project = self._post_custom_field(id, value, project)
 
-        #now, we check the standard fields. there's only really two to worry about I guess
+        #now, we check the standard fields.
         st_fields = self._get_rm_fields(project.rm_project_id, standard=True)
         if isinstance(st_fields, str):
             project.error += st_fields
             return project
-        if st_fields.get("client") != project.client or st_fields.get("project_code") != project.project_code:
-            self.log.info(f"Updating standard fields for project {project.enum} {project.name}")
-            project = self._post_standard_field(project)
-        return project #send it back
+        if st_fields.get("client") != project.client :
+            project = self._post_standard_field(project, "client", project.client)
+        if st_fields.get("project_code") is None and project.project_code:
+            project = self._post_standard_field(project, "project_code", project.project_code)
+        
+        return project 
    
     def _archive_rm(self, project:Project):
         """Marks Arhvive attribute on RM project"""
+        self.log.info(f"Archiving {project.name}")
         data2={
             'id':project.rm_project_id,
             'archived':'true'
             }
         response2 = requests.put(f"https://api.rm.smartsheet.com/api/v1/projects/{project.rm_project_id}", headers=self.rm_header, data=json.dumps(data2))
         if  response2.status_code == 200:
-            self.log.info(f"{project.name} correctly archived in RM")
+            self.log.info(f"{project.enum} {project.name} with DCT Status {project.dct_status} archived in RM {project.rm_project_id}")
             project.archived = True
         else:
             self.log.error(f"Error with archive update: {response2.json()}")
@@ -673,7 +723,7 @@ class AutoRM():
             project.error += f"Error updating custom field: {field_id} : {value} Error:{response.status_code} {response.content}"
         return project
         
-    def _post_standard_field(self, project:Project):
+    def _post_standard_field(self, project:Project, key:str, value:str):
         """Updates the Standard fields in RM Project. IF error, error messasge will be stored in Project object variable to be posted to smartsheet. 
         Params:
             project: The Project object with updates
@@ -681,17 +731,16 @@ class AutoRM():
             project: The project object with added error message, if any
             """
         data =  {
-            'id':project.rm_project_id,
-            'project_code':project.project_code,
-            'client':project.client
+            key:value
         }
         response = requests.put(f"https://api.rm.smartsheet.com/api/v1/projects/{project.rm_project_id}", headers=self.rm_header, data=json.dumps(data))
         if response.status_code == 200:
-            self.log.info(f"Updated {project.name}'s standard field data")
+            self.log.info(f"Updated {project.enum} {project.name} (RM ID: {project.rm_project_id}) standard field {key} to {value}")
         
         else:
-            self.log.error(f"ERROR: Failed to update standard fields for project {project.name} {project.rm_project_id} MESSAGE: {response.text}")
-            project.error += f"ERROR: Failed to update one of Project Code {project.project_code} AND/OR Client {project.client} MESSAGE: {response.text}"
+            error = f"ERROR: Failed to update standard field {key} to {value} for project {project.enum} {project.name} {project.rm_project_id} MESSAGE: {response.text}"
+            self.log.error(error)
+            project.error += error
         return project
     #endregion
         

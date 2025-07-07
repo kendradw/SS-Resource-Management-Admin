@@ -2,10 +2,11 @@ from SS_RM_admin import SmartsheetRmAdmin
 from auto_rm import AutoRM
 import json
 from configs.setup_logger import setup_logger
+import logging
 
 def main():
     # Setup Logger
-    log = setup_logger(__name__, file_path="configs/log.log")
+    log = setup_logger(__name__, file_path="configs/log.log", level=logging.DEBUG)
     log.info("Starting main...")
     # Sync Projects (DCT + RM)
     arm = AutoRM(log)
@@ -16,7 +17,7 @@ def main():
         json.dump(arm.rm_projects_map, of, indent=2)
     with open("dct_sheets.json", "w") as of:
         json.dump(arm.existing_dct_sheets, of, indent=2)
-    # ----------------------
+    # # ----------------------
 
     # Sync Data (Hours + Assignments)
     with open("configs/config.json", "r") as f:
