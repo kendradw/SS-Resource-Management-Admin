@@ -519,7 +519,11 @@ class SmartsheetRmAdmin():
             #add estimate and estimate presented to metadata
             
             sheet_grid = grid(sheet_info['ss_sheet_id'])
-            sheet_grid.fetch_content()
+            try:
+                sheet_grid.fetch_content()
+            except Exception as e:
+                self.log.error(f"Unable to fetch sheet content: {e}")
+                return
             df = sheet_grid.df
             sheet_dict = df[df['Project'].notna()].to_dict('records')
             ss_assignment_data = {}
@@ -696,9 +700,9 @@ class SmartsheetRmAdmin():
             try:
                 proj['sheet_grid_obj'].update_rows(proj['ss_assignment_to_new_status'], 'Task Name - Backend Key')
             except ValueError as ve:
-                self.log.error(f'row update failed b/c row was missing from {proj["name"]} Smartsheet {ve}')
+                self.log.debug(f'row update failed b/c row was missing from {proj["name"]} Smartsheet {ve}')
             except ApiError as ae:
-                self.log.error(f'updating the {proj["name"]} assignments failed for update {update} {ae}')
+                self.log.debug(f'updating the {proj["name"]} assignments failed for update {update} {ae}')
     #endregion
     #region ---- post to ss ------------------------------------------------------------------
     def post_ss_data(self, data):
@@ -783,7 +787,7 @@ class SmartsheetRmAdmin():
                     self.grab_connected_sheet_data(proj_i, proj)
                     update = self.grab_rm_assignment_data(proj)
                     self.update_assignments_in_ss(update,proj)            
-        except AttributeError:
+        except AttributeError as e:
             self.log.error(f"Error updating assignments for {proj['name']}: {e}")
             # self.grab_proj_sheetids()
             # self.establish_sheet_connection()
