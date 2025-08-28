@@ -109,6 +109,8 @@ class AutoRM():
                 project = self._check_existing_grid(project) #check if there's an existing sheet that didn't get linked
                 if project.dct_grid_bool is False: # now check again if it needs one
                     project = self.create_dct_grid(project) # then create
+                    if project is None:
+                        continue
             if project.dct_grid_url and project.rm_project_id is None: #there's a grid but no RM
                 project = self._check_existing_rm(project) #check if there's an existing project that got lost
                 if project.rm_project_id is None: # if it still needs an RM project
@@ -367,9 +369,9 @@ class AutoRM():
             if sheet_name in self.rm_projects_map: #there's a matching sheet name
                 rm_enum = self._get_rm_enum(self.rm_projects_map[sheet_name]) #validate enumerator is matches or is empty (newly instantiated project)
                 if  rm_enum == project.enum or rm_enum is None:
-                    self.log.info(f"Found lost RM project for. Linking existing RM project for {project.name} {project.enum} to RM ID: {self.rm_projects_map[project.name]}")
+                    self.log.info(f"Found lost RM project for. Linking existing RM project for {project.name} {project.enum} to RM ID: {self.rm_projects_map[sheet_name]}")
                     project.rm_project_bool = True
-                    project.rm_project_id = self.rm_projects_map[project.name]
+                    project.rm_project_id = self.rm_projects_map[sheet_name]
                     
             # ---- Backtracking logic -----
             # if sheet_name.endswith("*"): #for backtracking, may cause errors moving forward?
@@ -402,7 +404,7 @@ class AutoRM():
             self.log.info(f"Creating DCT grid sheet for {project.enum} {project.name}...")
 
         # Request
-        url = f"https://api.smartsheet.com/2.0/workspaces/{self.DCT_PLANNING_WORKSPACE_ID}/sheets?include=data,attachments,cellLinks,discussions,filters,forms,ruleRecipients,rules"
+        url = f"https://api.smartsheet.com/2.0/workspaces/{self.DCT_PLANNING_WORKSPACE_ID}/sheets?include=data,attachments,discussions"
         headers = {
             "Authorization": f"Bearer {self.ss_token}",
             "Content-Type": "application/json"
