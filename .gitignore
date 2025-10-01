@@ -24,3 +24,7 @@ __pycache__/
 *.spec
 build/
 dist/
+install.ps1
+uninstall.ps1
+.gitignore
+
