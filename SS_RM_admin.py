@@ -172,6 +172,8 @@ class SmartsheetRmAdmin():
 
     def custom_round(self, n, digits):
         '''python does not round as I'd expect and it needs to be a perfect match with the round on SS so had to make custom (using chatGPT)'''
+        if n is None:
+            return 0
         # Scale the number to keep the part we're interested in as an integer.
         scaled = n * (10 ** digits)
         floor_scaled = int(scaled)  # Get the floor value of the scaled number.

@@ -26,7 +26,7 @@ def main():
     srm.run_all()
 
     log.info("----COMPLETE----")
-main()
+# main()
 
 def debug():
     log = setup_logger(__name__, file_path="configs/log.log")
@@ -35,11 +35,12 @@ def debug():
     # with open("rm_map.json", "w") as of:
     #     json.dump(arm.rm_projects_map, of, indent=2)
 
-    ##checking hh2 issue Forrest bibao
-    # with open("configs/config.json", "r") as f:
-    #     config = json.load(f)
-    # srm = SmartsheetRmAdmin(config, log)
-    # srm.grab_rm_userids()
-    # srm.fetch_and_prepare_hh2_data()
+    with open("configs/config.json", "r") as f:
+        config = json.load(f)
+    srm = SmartsheetRmAdmin(config, log)
+    srm.grab_rm_data()
+    # srm.run_hours_update()
+    srm.run_assignment_updates()
+    print("COMPLETE----")
 
-# debug()
+debug()

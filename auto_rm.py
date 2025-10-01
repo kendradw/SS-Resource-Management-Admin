@@ -147,7 +147,7 @@ class AutoRM():
             if project.rm_project_id and not project.archived: #needs to be archived
                 if project.rm_project_id in self.rm_archived_list:
                     project.archived = True
-                project = self._archive_rm(project)
+                # project = self._archive_rm(project)
                 project = self._archive_grid_name(project)
         
         #logging archive to DCT PL sheet
